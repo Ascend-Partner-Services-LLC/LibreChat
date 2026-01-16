@@ -1,7 +1,8 @@
 import { useEffect, useCallback, useRef } from 'react';
-import { useRecoilValue } from 'recoil';
+import { useRecoilValue, useSetRecoilState } from 'recoil';
 import { useSearchParams } from 'react-router-dom';
 import { QueryClient, useQueryClient } from '@tanstack/react-query';
+import { mcpPromptState, type MCPPromptParams } from '~/store/mcpPrompt';
 import {
   QueryKeys,
   EModelEndpoint,
@@ -120,6 +121,7 @@ export default function useQueryParams({
   const promptTextRef = useRef<string | null>(null);
   const validSettingsRef = useRef<TPreset | null>(null);
   const settingsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mcpPromptRef = useRef<MCPPromptParams | null>(null);
 
   const methods = useChatFormContext();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -127,6 +129,7 @@ export default function useQueryParams({
   const modularChat = useRecoilValue(store.modularChat);
   const availableTools = useRecoilValue(store.availableTools);
   const { submitMessage } = useSubmitMessage();
+  const setMcpPrompt = useSetRecoilState(mcpPromptState);
 
   const queryClient = useQueryClient();
   const { conversation, newConversation } = useChatContext();
@@ -284,7 +287,9 @@ export default function useQueryParams({
 
     methods.handleSubmit((data) => {
       if (data.text?.trim()) {
-        submitMessage(data);
+        // Pass mcpPrompt directly to bypass Recoil timing issues
+        submitMessage({ ...data, mcpPrompt: mcpPromptRef.current ?? undefined });
+        mcpPromptRef.current = null; // Clear after use
 
         const newUrl = window.location.pathname;
         window.history.replaceState({}, '', newUrl);
@@ -307,9 +312,34 @@ export default function useQueryParams({
       delete queryParams.prompt;
       delete queryParams.q;
       delete queryParams.submit;
+
+      // Extract MCP prompt params if present
+      // Format: ?mcp_server=workspace&mcp_prompt=client_session&contact_id=xxx
+      let mcpPromptParams: MCPPromptParams | null = null;
+      // Params that should NOT be passed to MCP prompts
+      const reservedParams = new Set(['mcp_server', 'mcp_prompt', 'embedded']);
+      if (queryParams.mcp_server && queryParams.mcp_prompt) {
+        const promptArgs: Record<string, string> = {};
+        // Extract all params that aren't reserved or standard settings
+        Object.keys(queryParams).forEach((key) => {
+          if (!reservedParams.has(key) && !tQueryParamsSchema.shape[key]) {
+            promptArgs[key] = queryParams[key];
+            delete queryParams[key];
+          }
+        });
+        mcpPromptParams = {
+          serverName: queryParams.mcp_server,
+          promptName: queryParams.mcp_prompt,
+          promptArgs,
+        };
+        delete queryParams.mcp_server;
+        delete queryParams.mcp_prompt;
+        delete queryParams.embedded; // Remove embedded flag, it's for UI only
+      }
+
       const validSettings = processValidSettings(queryParams);
 
-      return { decodedPrompt, validSettings, shouldAutoSubmit };
+      return { decodedPrompt, validSettings, shouldAutoSubmit, mcpPromptParams };
     };
 
     const intervalId = setInterval(() => {
@@ -331,7 +361,14 @@ export default function useQueryParams({
         return;
       }
 
-      const { decodedPrompt, validSettings, shouldAutoSubmit } = processQueryParams();
+      const { decodedPrompt, validSettings, shouldAutoSubmit, mcpPromptParams } = processQueryParams();
+
+      // Store MCP prompt params in ref for direct passing (bypasses Recoil timing issues)
+      // Also set in Recoil for other components that might need it
+      if (mcpPromptParams) {
+        mcpPromptRef.current = mcpPromptParams;
+        setMcpPrompt(mcpPromptParams);
+      }
 
       if (!shouldAutoSubmit) {
         submissionHandledRef.current = true;
@@ -389,7 +426,8 @@ export default function useQueryParams({
 
           methods.handleSubmit((data) => {
             if (data.text?.trim()) {
-              submitMessage(data);
+              // Pass mcpPrompt directly to bypass Recoil timing issues
+              submitMessage({ ...data, mcpPrompt: mcpPromptParams ?? undefined });
             }
           })();
         }
@@ -424,6 +462,7 @@ export default function useQueryParams({
     setSearchParams,
     queryClient,
     processSubmission,
+    setMcpPrompt,
   ]);
 
   useEffect(() => {

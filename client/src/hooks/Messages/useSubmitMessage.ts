@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useRecoilValue, useSetRecoilState } from 'recoil';
-import { replaceSpecialVars } from 'librechat-data-provider';
+import { replaceSpecialVars, TMCPPrompt } from 'librechat-data-provider';
 import { useChatContext, useChatFormContext, useAddedChatContext } from '~/Providers';
 import { useAuthContext } from '~/hooks/AuthContext';
 import store from '~/store';
@@ -15,7 +15,7 @@ export default function useSubmitMessage() {
   const setActivePrompt = useSetRecoilState(store.activePromptByIndex(index));
 
   const submitMessage = useCallback(
-    (data?: { text: string }) => {
+    (data?: { text: string; mcpPrompt?: TMCPPrompt }) => {
       if (!data) {
         return console.warn('No data provided to submitMessage');
       }
@@ -33,6 +33,7 @@ export default function useSubmitMessage() {
         },
         {
           addedConvo: addedConvo ?? undefined,
+          mcpPrompt: data.mcpPrompt,
         },
       );
       methods.reset();

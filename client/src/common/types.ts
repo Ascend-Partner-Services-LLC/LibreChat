@@ -358,6 +358,8 @@ export type TOptions = {
   overrideFiles?: t.TMessage['files'];
   /** Added conversation for multi-convo feature - sent to server as part of submission payload */
   addedConvo?: t.TConversation;
+  /** MCP prompt to inject context before the first message - passed directly to bypass Recoil timing issues */
+  mcpPrompt?: t.TMCPPrompt;
 };
 
 export type TAskFunction = (props: TAskProps, options?: TOptions) => void;

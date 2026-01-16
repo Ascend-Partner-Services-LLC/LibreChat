@@ -4,6 +4,7 @@ const { logger } = require('@librechat/data-schemas');
 const {
   uaParser,
   checkBan,
+  embeddedAuth,
   requireJwtAuth,
   messageIpLimiter,
   configMiddleware,
@@ -16,6 +17,8 @@ const { LIMIT_MESSAGE_IP, LIMIT_MESSAGE_USER } = process.env ?? {};
 
 const router = express.Router();
 
+// Embedded auth must come BEFORE requireJwtAuth to allow workspace-ui embedding
+router.use(embeddedAuth);
 router.use(requireJwtAuth);
 router.use(checkBan);
 router.use(uaParser);

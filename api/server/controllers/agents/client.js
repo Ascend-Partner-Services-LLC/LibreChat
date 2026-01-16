@@ -492,6 +492,43 @@ class AgentClient extends BaseClient {
       }
     }
 
+    // Inject MCP prompt context if provided (for pre-loaded client/project context)
+    const mcpPrompt = this.options.req.body.mcpPrompt;
+    if (mcpPrompt && mcpPrompt.serverName && mcpPrompt.promptName) {
+      try {
+        logger.info('[AgentClient] Loading MCP prompt:', mcpPrompt.promptName, 'from', mcpPrompt.serverName);
+        
+        // Try request cookie first, fallback to stored cookie from embeddedAuth
+        let promptWorkspaceCookie = this.options.req.cookies?._workspacex_key;
+        if (!promptWorkspaceCookie && this.options.req.user?.id) {
+          const { getStoredWorkspaceCookie } = require('~/server/middleware');
+          promptWorkspaceCookie = getStoredWorkspaceCookie(this.options.req.user.id.toString());
+          if (promptWorkspaceCookie) {
+            logger.info('[AgentClient] Using stored workspace cookie for MCP prompt');
+          }
+        }
+        
+        const promptContent = await getMCPManager().getPrompt(
+          mcpPrompt.serverName,
+          mcpPrompt.promptName,
+          mcpPrompt.promptArgs || {},
+          {
+            // Forward cookies for auth
+            mcpCookies: promptWorkspaceCookie
+              ? { _workspacex_key: promptWorkspaceCookie }
+              : undefined,
+          },
+        );
+        if (promptContent) {
+          // Prepend prompt context to system content so it comes first
+          systemContent = [promptContent, systemContent].filter(Boolean).join('\n\n');
+          logger.info('[AgentClient] Injected MCP prompt context (' + promptContent.length + ' chars)');
+        }
+      } catch (error) {
+        logger.error('[AgentClient] Failed to inject MCP prompt:', error);
+      }
+    }
+
     if (systemContent) {
       this.options.agent.instructions = systemContent;
     }
@@ -945,11 +982,33 @@ class AgentClient extends BaseClient {
           last_agent_index: this.agentConfigs?.size ?? 0,
           user_id: this.user ?? this.options.req.user?.id,
           hide_sequential_outputs: this.options.agent.hide_sequential_outputs,
-          requestBody: {
-            messageId: this.responseMessageId,
-            conversationId: this.conversationId,
-            parentMessageId: this.parentMessageId,
-          },
+          requestBody: (() => {
+            // Try to get workspace cookie from request first
+            let workspaceCookie = this.options.req.cookies?._workspacex_key;
+            
+            // Fallback to stored cookie (from embeddedAuth initial page load)
+            // This is needed because API requests from iframe don't include cross-origin cookies
+            if (!workspaceCookie && this.options.req.user?.id) {
+              const { getStoredWorkspaceCookie } = require('~/server/middleware');
+              workspaceCookie = getStoredWorkspaceCookie(this.options.req.user.id.toString());
+              if (workspaceCookie) {
+                console.log('[MCP Cookie Debug] Using stored workspace cookie from embeddedAuth');
+              }
+            }
+            
+            const hasCookie = !!workspaceCookie;
+            console.log(`[MCP Cookie Debug] req.cookies keys: ${Object.keys(this.options.req.cookies || {}).join(', ')}`);
+            console.log(`[MCP Cookie Debug] _workspacex_key present: ${hasCookie} (from ${workspaceCookie ? (this.options.req.cookies?._workspacex_key ? 'request' : 'stored') : 'none'})`);
+            return {
+              messageId: this.responseMessageId,
+              conversationId: this.conversationId,
+              parentMessageId: this.parentMessageId,
+              // Forward workspace cookie to MCP servers for authentication
+              mcpCookies: hasCookie
+                ? { _workspacex_key: workspaceCookie }
+                : undefined,
+            };
+          })(),
           user: createSafeUser(this.options.req.user),
         },
         recursionLimit: agentsEConfig?.recursionLimit ?? 25,

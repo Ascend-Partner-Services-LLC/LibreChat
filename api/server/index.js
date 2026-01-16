@@ -162,6 +162,25 @@ const startServer = async () => {
 
   app.use(ErrorController);
 
+  // Embedded auth middleware for initial page load
+  // Sets JWT tokens before serving index.html so frontend doesn't redirect to login
+  const { embeddedAuth } = require('./middleware');
+  
+  app.use(async (req, res, next) => {
+    // Only process for embedded mode
+    if (req.query.embedded !== 'true') {
+      return next();
+    }
+    
+    // Run embedded auth to set tokens
+    try {
+      await embeddedAuth(req, res, () => {});
+    } catch (err) {
+      logger.error('[embeddedAuth] Error in page load middleware:', err);
+    }
+    next();
+  });
+
   app.use((req, res) => {
     res.set({
       'Cache-Control': process.env.INDEX_CACHE_CONTROL || 'no-cache, no-store, must-revalidate',

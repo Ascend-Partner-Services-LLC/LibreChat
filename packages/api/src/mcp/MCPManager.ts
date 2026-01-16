@@ -226,8 +226,28 @@ Please follow these instructions when using tools from the respective MCP server
         customUserVars: customUserVars,
         body: requestBody,
       });
-      if ('headers' in currentOptions) {
-        connection.setRequestHeaders(currentOptions.headers || {});
+      
+      // Build headers: merge config headers with forwarded cookies
+      const headers: Record<string, string> = {};
+      if ('headers' in currentOptions && currentOptions.headers) {
+        Object.assign(headers, currentOptions.headers);
+      }
+      
+      // Forward workspace cookies from the original request to MCP server
+      // This enables MCP servers to authenticate using the user's session
+      const mcpCookies = (requestBody as { mcpCookies?: Record<string, string> })?.mcpCookies;
+      logger.info(`${logPrefix} requestBody keys: ${Object.keys(requestBody || {}).join(', ')}`);
+      logger.info(`${logPrefix} mcpCookies present: ${!!mcpCookies}`);
+      if (mcpCookies) {
+        const cookieStr = Object.entries(mcpCookies)
+          .map(([key, value]) => `${key}=${value}`)
+          .join('; ');
+        headers['Cookie'] = cookieStr;
+        logger.info(`${logPrefix} Forwarding cookies to MCP server: ${Object.keys(mcpCookies).join(', ')}`);
+      }
+      
+      if (Object.keys(headers).length > 0) {
+        connection.setRequestHeaders(headers);
       }
 
       const result = await connection.client.request(
@@ -255,6 +275,76 @@ Please follow these instructions when using tools from the respective MCP server
       logger.error(`${logPrefix}[${toolName}] Tool call failed`, error);
       // Rethrowing allows the caller (createMCPTool) to handle the final user message
       throw error;
+    }
+  }
+
+  /**
+   * Get a prompt from an MCP server and return its content.
+   * This is used to inject dynamic context into conversations.
+   * 
+   * @param serverName - The name of the MCP server
+   * @param promptName - The name of the prompt to get
+   * @param promptArgs - Arguments to pass to the prompt
+   * @param requestBody - Request body containing cookies for auth forwarding
+   * @returns The prompt content as a string, or null if not found
+   */
+  public async getPrompt(
+    serverName: string,
+    promptName: string,
+    promptArgs: Record<string, string>,
+    requestBody?: RequestBody,
+  ): Promise<string | null> {
+    const logPrefix = `[MCP][${serverName}]`;
+    
+    try {
+      // Get connection to the MCP server
+      const connection = await this.getConnection({ serverName });
+      if (!connection) {
+        logger.warn(`${logPrefix} No connection found for prompt request`);
+        return null;
+      }
+
+      // Forward cookies if provided (for auth)
+      if (requestBody) {
+        const mcpCookies = (requestBody as { mcpCookies?: Record<string, string> })?.mcpCookies;
+        if (mcpCookies) {
+          const cookieStr = Object.entries(mcpCookies)
+            .map(([key, value]) => `${key}=${value}`)
+            .join('; ');
+          connection.setRequestHeaders({ Cookie: cookieStr });
+          logger.info(`${logPrefix} Forwarding cookies for prompt request`);
+        }
+      }
+
+      logger.info(`${logPrefix} Getting prompt: ${promptName} with args:`, promptArgs);
+
+      // Call prompts/get on the MCP server
+      const result = await connection.client.getPrompt({
+        name: promptName,
+        arguments: promptArgs,
+      });
+
+      if (!result || !result.messages || result.messages.length === 0) {
+        logger.warn(`${logPrefix} Prompt returned no messages`);
+        return null;
+      }
+
+      // Extract text content from prompt messages
+      const content = result.messages
+        .map((msg) => {
+          if (msg.content.type === 'text') {
+            return msg.content.text;
+          }
+          return '';
+        })
+        .filter(Boolean)
+        .join('\n\n');
+
+      logger.info(`${logPrefix} Got prompt content (${content.length} chars)`);
+      return content;
+    } catch (error) {
+      logger.error(`${logPrefix} Failed to get prompt "${promptName}":`, error);
+      return null;
     }
   }
 }

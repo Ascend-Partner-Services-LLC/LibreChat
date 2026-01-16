@@ -100,6 +100,13 @@ export type TEphemeralAgent = {
   execute_code?: boolean;
 };
 
+/** MCP Prompt parameters for context injection */
+export type TMCPPrompt = {
+  serverName: string;
+  promptName: string;
+  promptArgs: Record<string, string>;
+};
+
 export type TPayload = Partial<TMessage> &
   Partial<TEndpointOption> & {
     isContinued: boolean;
@@ -111,6 +118,8 @@ export type TPayload = Partial<TMessage> &
     editedContent?: TEditedContent | null;
     /** Added conversation for multi-convo feature */
     addedConvo?: TConversation;
+    /** MCP prompt for context injection (first message only) */
+    mcpPrompt?: TMCPPrompt;
   };
 
 export type TEditedContent =
@@ -140,6 +149,8 @@ export type TSubmission = {
   editedContent?: TEditedContent | null;
   /** Added conversation for multi-convo feature */
   addedConvo?: TConversation;
+  /** MCP prompt for context injection (first message only) */
+  mcpPrompt?: TMCPPrompt;
 };
 
 export type EventSubmission = Omit<TSubmission, 'initialResponse'> & { initialResponse: TMessage };

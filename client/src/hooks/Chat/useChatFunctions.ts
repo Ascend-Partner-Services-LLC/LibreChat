@@ -28,7 +28,7 @@ import type { TAskFunction, ExtendedFile } from '~/common';
 import useSetFilesToDelete from '~/hooks/Files/useSetFilesToDelete';
 import useGetSender from '~/hooks/Conversations/useGetSender';
 import { logger, createDualMessageContent } from '~/utils';
-import store, { useGetEphemeralAgent } from '~/store';
+import store, { useGetEphemeralAgent, mcpPromptState } from '~/store';
 import useUserKey from '~/hooks/Input/useUserKey';
 import { useAuthContext } from '~/hooks';
 
@@ -69,6 +69,8 @@ export default function useChatFunctions({
   const setFilesToDelete = useSetFilesToDelete();
   const getEphemeralAgent = useGetEphemeralAgent();
   const isTemporary = useRecoilValue(store.isTemporary);
+  const mcpPrompt = useRecoilValue(mcpPromptState);
+  const resetMcpPrompt = useResetRecoilState(mcpPromptState);
   const { getExpiry } = useUserKey(immutableConversation?.endpoint ?? '');
   const setIsSubmitting = useSetRecoilState(store.isSubmittingFamily(index));
   const setShowStopButton = useSetRecoilState(store.showStopButtonByIndex(index));
@@ -92,6 +94,7 @@ export default function useChatFunctions({
       overrideMessages,
       overrideFiles,
       addedConvo,
+      mcpPrompt: optionsMcpPrompt,
     } = {},
   ) => {
     setShowStopButton(false);
@@ -307,6 +310,8 @@ export default function useChatFunctions({
     }
 
     logger.log('message_state', initialResponse);
+    // Use optionsMcpPrompt if provided (direct pass), otherwise fall back to Recoil state
+    const effectiveMcpPrompt = optionsMcpPrompt ?? mcpPrompt;
     const submission: TSubmission = {
       conversation: {
         ...conversation,
@@ -327,7 +332,14 @@ export default function useChatFunctions({
       ephemeralAgent,
       editedContent,
       addedConvo,
+      // Include MCP prompt for context injection (used once then cleared)
+      mcpPrompt: effectiveMcpPrompt ?? undefined,
     };
+
+    // Clear MCP prompt after including in submission (only used for first message)
+    if (effectiveMcpPrompt) {
+      resetMcpPrompt();
+    }
 
     if (isRegenerate) {
       setMessages([...submission.messages, initialResponse]);
