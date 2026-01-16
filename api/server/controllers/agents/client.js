@@ -518,6 +518,7 @@ class AgentClient extends BaseClient {
               ? { _workspacex_key: promptWorkspaceCookie }
               : undefined,
           },
+          this.options.req.user, // Pass user for user-specific connection with cookies
         );
         if (promptContent) {
           // Prepend prompt context to system content so it comes first
@@ -1000,9 +1001,9 @@ class AgentClient extends BaseClient {
             console.log(`[MCP Cookie Debug] req.cookies keys: ${Object.keys(this.options.req.cookies || {}).join(', ')}`);
             console.log(`[MCP Cookie Debug] _workspacex_key present: ${hasCookie} (from ${workspaceCookie ? (this.options.req.cookies?._workspacex_key ? 'request' : 'stored') : 'none'})`);
             return {
-              messageId: this.responseMessageId,
-              conversationId: this.conversationId,
-              parentMessageId: this.parentMessageId,
+            messageId: this.responseMessageId,
+            conversationId: this.conversationId,
+            parentMessageId: this.parentMessageId,
               // Forward workspace cookie to MCP servers for authentication
               mcpCookies: hasCookie
                 ? { _workspacex_key: workspaceCookie }

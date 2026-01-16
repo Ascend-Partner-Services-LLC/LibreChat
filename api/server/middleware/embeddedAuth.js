@@ -33,7 +33,13 @@ const workspaceCookieStore = new Map();
 function getStoredWorkspaceCookie(userId) {
   const stored = workspaceCookieStore.get(userId);
   if (stored && Date.now() - stored.timestamp < CACHE_TTL) {
+    logger.debug('[embeddedAuth] Retrieved stored workspace cookie for user:', userId, 'age:', Date.now() - stored.timestamp, 'ms');
     return stored.cookie;
+  }
+  if (stored) {
+    logger.debug('[embeddedAuth] Stored cookie expired for user:', userId, 'age:', Date.now() - stored.timestamp, 'ms');
+  } else {
+    logger.debug('[embeddedAuth] No stored cookie found for user:', userId);
   }
   return null;
 }
@@ -120,23 +126,32 @@ const embeddedAuth = async (req, res, next) => {
     return next();
   }
 
-  // Skip if user is already authenticated
-  if (req.user) {
-    return next();
-  }
-
-  // Check for workspace cookie
-  const cookieHeader = req.headers.cookie;
-  if (!cookieHeader) {
-    logger.debug('[embeddedAuth] No cookies in embedded request');
-    return next();
-  }
-
-  const parsedCookies = cookies.parse(cookieHeader);
-  const workspaceCookie = parsedCookies._workspacex_key;
+  // Check for workspace cookie first (even if user is already authenticated)
+  // We need to store it for MCP forwarding even if user already has JWT tokens
+  // Try multiple sources: 1) URL query param (for cross-origin iframe), 2) Cookie header
+  let workspaceCookie = req.query.workspace_cookie;
   
   if (!workspaceCookie) {
-    logger.debug('[embeddedAuth] No workspace cookie found');
+    const cookieHeader = req.headers.cookie;
+    if (cookieHeader) {
+      const parsedCookies = cookies.parse(cookieHeader);
+      workspaceCookie = parsedCookies._workspacex_key;
+    }
+  }
+  
+  // If user is already authenticated but we have a workspace cookie, store it for MCP forwarding
+  if (req.user && workspaceCookie) {
+    storeWorkspaceCookie(req.user._id.toString(), workspaceCookie);
+    logger.info('[embeddedAuth] Stored workspace cookie for already-authenticated user:', req.user.email, 'cookie length:', workspaceCookie.length, 'source:', req.query.workspace_cookie ? 'query-param' : 'cookie-header');
+    return next();
+  }
+  
+  if (!workspaceCookie) {
+    logger.debug('[embeddedAuth] No workspace cookie found (checked query param and cookie header)');
+    // If user is already authenticated, continue (don't block)
+    if (req.user) {
+      return next();
+    }
     return next();
   }
 

@@ -31,6 +31,7 @@ export class MCPConnectionFactory {
   protected readonly oauthEnd?: () => Promise<void>;
   protected readonly returnOnOAuth?: boolean;
   protected readonly connectionTimeout?: number;
+  protected readonly requestBody?: t.RequestBody;
 
   /** Creates a new MCP connection with optional OAuth support */
   static async create(
@@ -64,6 +65,7 @@ export class MCPConnectionFactory {
       this.oauthEnd = oauth.oauthEnd;
       this.returnOnOAuth = oauth.returnOnOAuth;
     }
+    this.requestBody = oauth?.requestBody;
   }
 
   /** Creates the base MCP connection with OAuth tokens */
@@ -75,6 +77,19 @@ export class MCPConnectionFactory {
       userId: this.userId,
       oauthTokens,
     });
+
+    // Set request headers (including cookies) BEFORE connecting
+    // This ensures the initial ping/connection includes authentication
+    if (this.requestBody) {
+      const mcpCookies = (this.requestBody as { mcpCookies?: Record<string, string> })?.mcpCookies;
+      if (mcpCookies) {
+        const cookieStr = Object.entries(mcpCookies)
+          .map(([key, value]) => `${key}=${value}`)
+          .join('; ');
+        connection.setRequestHeaders({ Cookie: cookieStr });
+        logger.info(`${this.logPrefix} Setting cookies on connection before connect: ${Object.keys(mcpCookies).join(', ')}`);
+      }
+    }
 
     let cleanupOAuthHandlers: (() => void) | null = null;
     if (this.useOAuth) {

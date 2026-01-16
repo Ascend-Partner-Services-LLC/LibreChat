@@ -89,6 +89,20 @@ export abstract class UserConnectionManager {
         connection = undefined;
       } else if (await connection.isConnected()) {
         logger.debug(`[MCP][User: ${userId}][${serverName}] Reusing active connection`);
+        
+        // Update headers if requestBody is provided (e.g., cookies for auth)
+        // This ensures cached connections get updated headers for each request
+        if (requestBody) {
+          const mcpCookies = (requestBody as { mcpCookies?: Record<string, string> })?.mcpCookies;
+          if (mcpCookies) {
+            const cookieStr = Object.entries(mcpCookies)
+              .map(([key, value]) => `${key}=${value}`)
+              .join('; ');
+            connection.setRequestHeaders({ Cookie: cookieStr });
+            logger.debug(`[MCP][User: ${userId}][${serverName}] Updated headers on cached connection`);
+          }
+        }
+        
         this.updateUserLastActivity(userId);
         return connection;
       } else {

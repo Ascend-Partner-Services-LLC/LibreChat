@@ -286,6 +286,7 @@ Please follow these instructions when using tools from the respective MCP server
    * @param promptName - The name of the prompt to get
    * @param promptArgs - Arguments to pass to the prompt
    * @param requestBody - Request body containing cookies for auth forwarding
+   * @param user - Optional user object for user-specific connections
    * @returns The prompt content as a string, or null if not found
    */
   public async getPrompt(
@@ -293,18 +294,25 @@ Please follow these instructions when using tools from the respective MCP server
     promptName: string,
     promptArgs: Record<string, string>,
     requestBody?: RequestBody,
+    user?: IUser,
   ): Promise<string | null> {
     const logPrefix = `[MCP][${serverName}]`;
     
     try {
-      // Get connection to the MCP server
-      const connection = await this.getConnection({ serverName });
+      // Get connection to the MCP server, passing requestBody so cookies are set during connection
+      // If user is provided, create a user-specific connection (needed for cookies)
+      const connection = await this.getConnection({ 
+        serverName,
+        user,
+        requestBody,
+      });
       if (!connection) {
         logger.warn(`${logPrefix} No connection found for prompt request`);
         return null;
       }
 
-      // Forward cookies if provided (for auth)
+      // Ensure cookies are set on the connection (in case it was reused from cache)
+      // This is critical for prompt requests which need authentication
       if (requestBody) {
         const mcpCookies = (requestBody as { mcpCookies?: Record<string, string> })?.mcpCookies;
         if (mcpCookies) {
@@ -312,7 +320,7 @@ Please follow these instructions when using tools from the respective MCP server
             .map(([key, value]) => `${key}=${value}`)
             .join('; ');
           connection.setRequestHeaders({ Cookie: cookieStr });
-          logger.info(`${logPrefix} Forwarding cookies for prompt request`);
+          logger.info(`${logPrefix} Set cookies on connection for prompt request: ${Object.keys(mcpCookies).join(', ')}`);
         }
       }
 

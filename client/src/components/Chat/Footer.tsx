@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import TagManager from 'react-gtm-module';
 import { Constants } from 'librechat-data-provider';
@@ -8,13 +8,19 @@ import { useLocalize } from '~/hooks';
 export default function Footer({ className }: { className?: string }) {
   const { data: config } = useGetStartupConfig();
   const localize = useLocalize();
+  const [isEmbedded, setIsEmbedded] = useState(false);
 
-  // Hide footer in embedded mode - check client-side only to avoid hydration issues
-  if (typeof window !== 'undefined') {
-    const searchParams = new URLSearchParams(window.location.search);
-    if (searchParams.get('embedded') === 'true') {
-      return null;
+  // Hide footer in embedded mode - check client-side only after mount to avoid hydration issues
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const searchParams = new URLSearchParams(window.location.search);
+      setIsEmbedded(searchParams.get('embedded') === 'true');
     }
+  }, []);
+
+  // Don't render footer in embedded mode
+  if (isEmbedded) {
+    return null;
   }
 
   const privacyPolicy = config?.interface?.privacyPolicy;
