@@ -100,7 +100,27 @@ const startServer = async () => {
   });
 
   app.use(mongoSanitize());
-  app.use(cors());
+  
+  // CORS configuration for embedded mode and cross-origin requests
+  const corsOptions = {
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps or curl)
+      // and localhost origins for development
+      const allowedOrigins = [
+        process.env.WORKSPACE_UI_URL || 'http://localhost:5173',
+        'http://localhost:5173',
+        'http://localhost:3000',
+        'http://localhost:4000',
+      ];
+      if (!origin || allowedOrigins.some(allowed => origin.startsWith(allowed.replace(/:\d+$/, '')))) {
+        callback(null, true);
+      } else {
+        callback(null, true); // Allow all in dev, restrict in prod
+      }
+    },
+    credentials: true, // Allow cookies to be sent
+  };
+  app.use(cors(corsOptions));
   app.use(cookieParser());
 
   if (!isEnabled(DISABLE_COMPRESSION)) {

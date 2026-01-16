@@ -60,12 +60,16 @@ function AuthLayout({
     <div className="relative flex min-h-screen flex-col bg-white dark:bg-gray-900">
       <Banner />
       <BlinkAnimation active={isFetching}>
-        <div className="mt-6 h-10 w-full bg-cover">
-          <img
-            src="assets/logo.svg"
-            className="h-full w-full object-contain"
-            alt={localize('com_ui_logo', { 0: startupConfig?.appTitle ?? 'LibreChat' })}
-          />
+        <div className="mt-6 flex flex-col items-center justify-center gap-3">
+          <div className="h-16 w-16">
+            <img
+              src="assets/logo.png"
+              className="h-full w-full object-contain"
+              alt={localize('com_ui_logo', { 0: startupConfig?.appTitle ?? 'Ascend AI' })}
+            />
+          </div>
+          <h1 className="text-2xl font-bold text-black dark:text-white">Ascend AI</h1>
+          <p className="text-sm text-gray-600 dark:text-gray-400 font-medium">Smarter tax work, done.</p>
         </div>
       </BlinkAnimation>
       <DisplayError />

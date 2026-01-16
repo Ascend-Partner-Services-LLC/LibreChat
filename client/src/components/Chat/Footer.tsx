@@ -9,6 +9,14 @@ export default function Footer({ className }: { className?: string }) {
   const { data: config } = useGetStartupConfig();
   const localize = useLocalize();
 
+  // Hide footer in embedded mode - check client-side only to avoid hydration issues
+  if (typeof window !== 'undefined') {
+    const searchParams = new URLSearchParams(window.location.search);
+    if (searchParams.get('embedded') === 'true') {
+      return null;
+    }
+  }
+
   const privacyPolicy = config?.interface?.privacyPolicy;
   const termsOfService = config?.interface?.termsOfService;
 
@@ -43,7 +51,7 @@ export default function Footer({ className }: { className?: string }) {
   const mainContentParts = (
     typeof config?.customFooter === 'string'
       ? config.customFooter
-      : '[LibreChat ' +
+      : '[Ascend AI ' +
         Constants.VERSION +
         '](https://librechat.ai) - ' +
         localize('com_ui_latest_footer')
