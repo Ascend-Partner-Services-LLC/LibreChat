@@ -11,6 +11,7 @@ export default function Footer({ className }: { className?: string }) {
   const [isEmbedded, setIsEmbedded] = useState(false);
 
   // Hide footer in embedded mode - check client-side only after mount to avoid hydration issues
+  // IMPORTANT: All hooks must be called before any conditional returns to avoid React error #300
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const searchParams = new URLSearchParams(window.location.search);
@@ -18,7 +19,16 @@ export default function Footer({ className }: { className?: string }) {
     }
   }, []);
 
-  // Don't render footer in embedded mode
+  useEffect(() => {
+    if (config?.analyticsGtmId != null && typeof window.google_tag_manager === 'undefined') {
+      const tagManagerArgs = {
+        gtmId: config.analyticsGtmId,
+      };
+      TagManager.initialize(tagManagerArgs);
+    }
+  }, [config?.analyticsGtmId]);
+
+  // Don't render footer in embedded mode (after all hooks are called)
   if (isEmbedded) {
     return null;
   }
@@ -62,15 +72,6 @@ export default function Footer({ className }: { className?: string }) {
         '](https://librechat.ai) - ' +
         localize('com_ui_latest_footer')
   ).split('|');
-
-  useEffect(() => {
-    if (config?.analyticsGtmId != null && typeof window.google_tag_manager === 'undefined') {
-      const tagManagerArgs = {
-        gtmId: config.analyticsGtmId,
-      };
-      TagManager.initialize(tagManagerArgs);
-    }
-  }, [config?.analyticsGtmId]);
 
   const mainContentRender = mainContentParts.map((text, index) => (
     <React.Fragment key={`main-content-part-${index}`}>

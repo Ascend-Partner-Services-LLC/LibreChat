@@ -130,11 +130,12 @@ const embeddedAuth = async (req, res, next) => {
   // We need to store it for MCP forwarding even if user already has JWT tokens
   // Try multiple sources: 1) URL query param (for cross-origin iframe), 2) Cookie header
   let workspaceCookie = req.query.workspace_cookie;
+  let parsedCookies = {};
   
   if (!workspaceCookie) {
     const cookieHeader = req.headers.cookie;
     if (cookieHeader) {
-      const parsedCookies = cookies.parse(cookieHeader);
+      parsedCookies = cookies.parse(cookieHeader);
       workspaceCookie = parsedCookies._workspacex_key;
     }
   }
