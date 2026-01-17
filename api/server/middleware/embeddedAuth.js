@@ -31,25 +31,25 @@ const workspaceCookieStore = new Map();
  * Used by MCP forwarding when the API request doesn't have the cookie
  */
 function getStoredWorkspaceCookie(userId) {
-  logger.info('[embeddedAuth] getStoredWorkspaceCookie called for userId:', userId, 'type:', typeof userId);
-  logger.info('[embeddedAuth] Current store keys:', Array.from(workspaceCookieStore.keys()));
+  logger.info(`[embeddedAuth] getStoredWorkspaceCookie called for userId: ${userId}, type: ${typeof userId}`);
+  logger.info(`[embeddedAuth] Current store keys: ${Array.from(workspaceCookieStore.keys()).join(', ')}`);
   
   const stored = workspaceCookieStore.get(userId);
   if (stored && Date.now() - stored.timestamp < CACHE_TTL) {
     const age = Date.now() - stored.timestamp;
-    logger.info('[embeddedAuth] ✅ Retrieved stored workspace cookie for user:', userId, 'age:', age, 'ms', 'cookie length:', stored.cookie?.length || 0);
+    logger.info(`[embeddedAuth] ✅ Retrieved stored workspace cookie for user: ${userId}, age: ${age}ms, cookie length: ${stored.cookie?.length || 0}`);
     return stored.cookie;
   }
   if (stored) {
     const age = Date.now() - stored.timestamp;
-    logger.warn('[embeddedAuth] ⚠️ Stored cookie expired for user:', userId, 'age:', age, 'ms (TTL:', CACHE_TTL, 'ms)');
+    logger.warn(`[embeddedAuth] ⚠️ Stored cookie expired for user: ${userId}, age: ${age}ms (TTL: ${CACHE_TTL}ms)`);
   } else {
-    logger.warn('[embeddedAuth] ❌ No stored cookie found for user:', userId);
+    logger.warn(`[embeddedAuth] ❌ No stored cookie found for user: ${userId}`);
     // Try to find similar keys (in case of format mismatch)
     const allKeys = Array.from(workspaceCookieStore.keys());
     const similarKeys = allKeys.filter(key => key.includes(userId) || userId.includes(key));
     if (similarKeys.length > 0) {
-      logger.warn('[embeddedAuth] Found similar keys in store:', similarKeys);
+      logger.warn(`[embeddedAuth] Found similar keys in store: ${similarKeys.join(', ')}`);
     }
   }
   return null;
@@ -59,9 +59,9 @@ function getStoredWorkspaceCookie(userId) {
  * Store workspace cookie for a user
  */
 function storeWorkspaceCookie(userId, cookie) {
-  logger.info('[embeddedAuth] 🔐 Storing workspace cookie for userId:', userId, 'type:', typeof userId, 'cookie length:', cookie?.length || 0);
+  logger.info(`[embeddedAuth] 🔐 Storing workspace cookie for userId: ${userId}, type: ${typeof userId}, cookie length: ${cookie?.length || 0}`);
   workspaceCookieStore.set(userId, { cookie, timestamp: Date.now() });
-  logger.info('[embeddedAuth] Store now contains', workspaceCookieStore.size, 'entries. Keys:', Array.from(workspaceCookieStore.keys()));
+  logger.info(`[embeddedAuth] Store now contains ${workspaceCookieStore.size} entries. Keys: ${Array.from(workspaceCookieStore.keys()).join(', ')}`);
 }
 
 /**
@@ -136,49 +136,25 @@ const embeddedAuth = async (req, res, next) => {
   // Skip if not embedded mode
   const isEmbedded = req.query.embedded === 'true' || req.headers['x-embedded-mode'] === 'true';
   
-  logger.info('[embeddedAuth] Request received:', 
-    `path=${req.path}, ` +
-    `isEmbedded=${isEmbedded}, ` +
-    `hasEmbeddedQuery=${req.query.embedded === 'true'}, ` +
-    `hasWorkspaceCookieQuery=${!!req.query.workspace_cookie}, ` +
-    `workspaceCookieQueryLength=${req.query.workspace_cookie?.length || 0}, ` +
-    `hasCookieHeader=${!!req.headers.cookie}, ` +
-    `hasUser=${!!req.user}, ` +
-    `userId=${req.user?._id?.toString() || req.user?.id?.toString() || 'none'}, ` +
-    `queryParams=${Object.keys(req.query).join(',')}`
-  );
+  logger.info(`[embeddedAuth] Request received: path=${req.path}, isEmbedded=${isEmbedded}, hasEmbeddedQuery=${req.query.embedded === 'true'}, hasWorkspaceCookieQuery=${!!req.query.workspace_cookie}, workspaceCookieQueryLength=${req.query.workspace_cookie?.length || 0}, hasCookieHeader=${!!req.headers.cookie}, hasUser=${!!req.user}, userId=${req.user?._id?.toString() || req.user?.id?.toString() || 'none'}, queryParams=${Object.keys(req.query).join(',')}`);
   
   if (!isEmbedded) {
     logger.debug('[embeddedAuth] Skipping - not embedded mode');
     return next();
   }
 
-  // Check for workspace cookie first (even if user is already authenticated)
-  // We need to store it for MCP forwarding even if user already has JWT tokens
-  // Try multiple sources: 1) URL query param (for cross-origin iframe), 2) Cookie header
+  // Get workspace cookie from query parameter (set by frontend from backend response body)
+  // The workspace backend now returns workspace_cookie in the response body for login/me endpoints
+  // Frontend passes it via query param since cookies may not be sent in cross-origin iframes
   let workspaceCookie = req.query.workspace_cookie;
   let parsedCookies = {};
   
-  logger.info('[embeddedAuth] Checking for workspace cookie:', 
-    `fromQueryParam=${!!workspaceCookie}, ` +
-    `queryParamLength=${workspaceCookie?.length || 0}, ` +
-    `queryParamValue=${workspaceCookie ? workspaceCookie.substring(0, 20) + '...' : 'none'}`
-  );
+  logger.info(`[embeddedAuth] Checking for workspace cookie: fromQueryParam=${!!workspaceCookie}, queryParamLength=${workspaceCookie?.length || 0}, queryParamValue=${workspaceCookie ? workspaceCookie.substring(0, 20) + '...' : 'none'}`);
   
-  if (!workspaceCookie) {
-    const cookieHeader = req.headers.cookie;
-    if (cookieHeader) {
-      parsedCookies = cookies.parse(cookieHeader);
-      workspaceCookie = parsedCookies._workspacex_key;
-      logger.info('[embeddedAuth] Checked cookie header:', 
-        `hasCookieHeader=true, ` +
-        `cookieKeys=${Object.keys(parsedCookies).join(',')}, ` +
-        `foundWorkspaceCookie=${!!workspaceCookie}, ` +
-        `workspaceCookieLength=${workspaceCookie?.length || 0}`
-      );
-    } else {
-      logger.info('[embeddedAuth] No cookie header present');
-    }
+  // Parse existing cookies for token check (but don't use for workspace cookie)
+  const cookieHeader = req.headers.cookie;
+  if (cookieHeader) {
+    parsedCookies = cookies.parse(cookieHeader);
   }
   
   // If user is already authenticated but we have a workspace cookie, store it for MCP forwarding
@@ -199,25 +175,26 @@ const embeddedAuth = async (req, res, next) => {
       });
     } else {
       storeWorkspaceCookie(userId, workspaceCookie);
-      logger.info('[embeddedAuth] ✅ Stored workspace cookie for already-authenticated user:', req.user.email, 'userId:', userId, 'cookie length:', workspaceCookie.length, 'source:', req.query.workspace_cookie ? 'query-param' : 'cookie-header');
+      logger.info(`[embeddedAuth] ✅ Stored workspace cookie for already-authenticated user: ${req.user.email}, userId: ${userId}, cookie length: ${workspaceCookie.length}, source: ${req.query.workspace_cookie ? 'query-param' : 'cookie-header'}`);
     }
     return next();
   }
   
   if (!workspaceCookie) {
-    logger.warn('[embeddedAuth] ⚠️ No workspace cookie found (checked query param and cookie header)', 
-      `hasUser=${!!req.user}, ` +
-      `userId=${req.user?._id?.toString() || req.user?.id?.toString() || 'none'}, ` +
-      `queryParams=${Object.keys(req.query).join(',')}, ` +
-      `cookieHeaderPresent=${!!req.headers.cookie}, ` +
-      `fullUrl=${req.protocol}://${req.get('host')}${req.originalUrl}`
-    );
+    logger.warn(`[embeddedAuth] ⚠️ No workspace cookie found in query param: hasUser=${!!req.user}, userId=${req.user?._id?.toString() || req.user?.id?.toString() || 'none'}, queryParams=${Object.keys(req.query).join(',')}, fullUrl=${req.protocol}://${req.get('host')}${req.originalUrl}`);
     // If user is already authenticated, continue (don't block)
     if (req.user) {
       logger.info('[embeddedAuth] User authenticated but no workspace cookie - continuing anyway');
       return next();
     }
     return next();
+  }
+  
+  // Normalize cookie format - frontend passes it as "_workspacex_key=value" from backend response
+  // Ensure it's in the correct format for validation
+  if (!workspaceCookie.startsWith('_workspacex_key=')) {
+    // If just the value, prepend the key name
+    workspaceCookie = `_workspacex_key=${workspaceCookie}`;
   }
 
   // Validate against workspace backend
@@ -228,7 +205,7 @@ const embeddedAuth = async (req, res, next) => {
   }
 
   const workspaceUser = await validateWorkspaceCookie(
-    `_workspacex_key=${workspaceCookie}`,
+    workspaceCookie,
     workspaceApiUrl
   );
 
@@ -253,7 +230,7 @@ const embeddedAuth = async (req, res, next) => {
         userId: userId
       });
       storeWorkspaceCookie(userId, workspaceCookie);
-      logger.info('[embeddedAuth] Stored workspace cookie for user:', user.email, 'userId:', userId);
+      logger.info(`[embeddedAuth] Stored workspace cookie for user: ${user.email}, userId: ${userId}`);
       
       // Check if we already have valid LibreChat tokens
       const existingToken = parsedCookies.token;
