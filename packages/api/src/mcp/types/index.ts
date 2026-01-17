@@ -148,6 +148,8 @@ export type ImageFormatter = (item: ImageContent) => FormattedContent;
 
 export type FormattedToolResponse = FormattedContentResult;
 
+export type { RequestBody };
+
 export type ParsedServerConfig = MCPOptions & {
   url?: string;
   requiresOAuth?: boolean;
