@@ -136,17 +136,17 @@ const embeddedAuth = async (req, res, next) => {
   // Skip if not embedded mode
   const isEmbedded = req.query.embedded === 'true' || req.headers['x-embedded-mode'] === 'true';
   
-  logger.info('[embeddedAuth] Request received:', {
-    path: req.path,
-    isEmbedded,
-    hasEmbeddedQuery: req.query.embedded === 'true',
-    hasEmbeddedHeader: req.headers['x-embedded-mode'] === 'true',
-    hasWorkspaceCookieQuery: !!req.query.workspace_cookie,
-    workspaceCookieQueryLength: req.query.workspace_cookie?.length || 0,
-    hasCookieHeader: !!req.headers.cookie,
-    hasUser: !!req.user,
-    userId: req.user?._id?.toString() || req.user?.id?.toString() || 'none'
-  });
+  logger.info('[embeddedAuth] Request received:', 
+    `path=${req.path}, ` +
+    `isEmbedded=${isEmbedded}, ` +
+    `hasEmbeddedQuery=${req.query.embedded === 'true'}, ` +
+    `hasWorkspaceCookieQuery=${!!req.query.workspace_cookie}, ` +
+    `workspaceCookieQueryLength=${req.query.workspace_cookie?.length || 0}, ` +
+    `hasCookieHeader=${!!req.headers.cookie}, ` +
+    `hasUser=${!!req.user}, ` +
+    `userId=${req.user?._id?.toString() || req.user?.id?.toString() || 'none'}, ` +
+    `queryParams=${Object.keys(req.query).join(',')}`
+  );
   
   if (!isEmbedded) {
     logger.debug('[embeddedAuth] Skipping - not embedded mode');
@@ -159,22 +159,23 @@ const embeddedAuth = async (req, res, next) => {
   let workspaceCookie = req.query.workspace_cookie;
   let parsedCookies = {};
   
-  logger.info('[embeddedAuth] Checking for workspace cookie:', {
-    fromQueryParam: !!workspaceCookie,
-    queryParamLength: workspaceCookie?.length || 0
-  });
+  logger.info('[embeddedAuth] Checking for workspace cookie:', 
+    `fromQueryParam=${!!workspaceCookie}, ` +
+    `queryParamLength=${workspaceCookie?.length || 0}, ` +
+    `queryParamValue=${workspaceCookie ? workspaceCookie.substring(0, 20) + '...' : 'none'}`
+  );
   
   if (!workspaceCookie) {
     const cookieHeader = req.headers.cookie;
     if (cookieHeader) {
       parsedCookies = cookies.parse(cookieHeader);
       workspaceCookie = parsedCookies._workspacex_key;
-      logger.info('[embeddedAuth] Checked cookie header:', {
-        hasCookieHeader: true,
-        cookieKeys: Object.keys(parsedCookies),
-        foundWorkspaceCookie: !!workspaceCookie,
-        workspaceCookieLength: workspaceCookie?.length || 0
-      });
+      logger.info('[embeddedAuth] Checked cookie header:', 
+        `hasCookieHeader=true, ` +
+        `cookieKeys=${Object.keys(parsedCookies).join(',')}, ` +
+        `foundWorkspaceCookie=${!!workspaceCookie}, ` +
+        `workspaceCookieLength=${workspaceCookie?.length || 0}`
+      );
     } else {
       logger.info('[embeddedAuth] No cookie header present');
     }
@@ -204,12 +205,13 @@ const embeddedAuth = async (req, res, next) => {
   }
   
   if (!workspaceCookie) {
-    logger.warn('[embeddedAuth] ⚠️ No workspace cookie found (checked query param and cookie header)', {
-      hasUser: !!req.user,
-      userId: req.user?._id?.toString() || req.user?.id?.toString() || 'none',
-      queryParams: Object.keys(req.query),
-      cookieHeaderPresent: !!req.headers.cookie
-    });
+    logger.warn('[embeddedAuth] ⚠️ No workspace cookie found (checked query param and cookie header)', 
+      `hasUser=${!!req.user}, ` +
+      `userId=${req.user?._id?.toString() || req.user?.id?.toString() || 'none'}, ` +
+      `queryParams=${Object.keys(req.query).join(',')}, ` +
+      `cookieHeaderPresent=${!!req.headers.cookie}, ` +
+      `fullUrl=${req.protocol}://${req.get('host')}${req.originalUrl}`
+    );
     // If user is already authenticated, continue (don't block)
     if (req.user) {
       logger.info('[embeddedAuth] User authenticated but no workspace cookie - continuing anyway');
