@@ -366,10 +366,17 @@ const resetPassword = async (userId, token, password) => {
  * @param {String | ObjectId} userId
  * @param {ServerResponse} res
  * @param {ISession | null} [session=null]
+ * @param {Object} [options={}] - Optional settings
+ * @param {Boolean} [options.isEmbedded=false] - Whether this is for embedded/iframe mode (requires SameSite=None for cross-origin)
  * @returns
  */
-const setAuthTokens = async (userId, res, _session = null) => {
+const setAuthTokens = async (userId, res, _session = null, options = {}) => {
   try {
+    const { isEmbedded = false } = options;
+    
+    // Log embedded mode detection for debugging incognito mode issues
+    logger.info(`[setAuthTokens] 🔐 Setting auth tokens - isEmbedded: ${isEmbedded}, isProduction: ${isProduction}, userId: ${userId}`);
+    
     let session = _session;
     let refreshToken;
     let refreshTokenExpires;
@@ -389,18 +396,31 @@ const setAuthTokens = async (userId, res, _session = null) => {
     const sessionExpiry = math(process.env.SESSION_EXPIRY, DEFAULT_SESSION_EXPIRY);
     const token = await generateToken(user, sessionExpiry);
 
-    res.cookie('refreshToken', refreshToken, {
+    // For embedded/iframe mode (especially incognito), use SameSite=None and Secure=true
+    // This allows cookies to work in cross-origin iframes
+    const cookieOptions = {
       expires: new Date(refreshTokenExpires),
       httpOnly: true,
-      secure: isProduction,
-      sameSite: 'strict',
+      secure: isEmbedded ? true : isProduction, // Always secure for embedded mode
+      sameSite: isEmbedded ? 'none' : 'strict', // None for cross-origin iframes
+    };
+
+    // Log cookie options for debugging
+    logger.info(`[setAuthTokens] 🍪 Cookie options:`, {
+      isEmbedded,
+      secure: cookieOptions.secure,
+      sameSite: cookieOptions.sameSite,
+      httpOnly: cookieOptions.httpOnly,
+      expires: cookieOptions.expires.toISOString(),
+      refreshTokenLength: refreshToken?.length || 0,
+      tokenLength: token?.length || 0,
     });
-    res.cookie('token_provider', 'librechat', {
-      expires: new Date(refreshTokenExpires),
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: 'strict',
-    });
+
+    res.cookie('refreshToken', refreshToken, cookieOptions);
+    res.cookie('token_provider', 'librechat', cookieOptions);
+    
+    logger.info(`[setAuthTokens] ✅ Auth tokens set successfully with ${isEmbedded ? 'EMBEDDED' : 'STANDARD'} cookie settings`);
+    
     return token;
   } catch (error) {
     logger.error('[setAuthTokens] Error in setting authentication tokens:', error);

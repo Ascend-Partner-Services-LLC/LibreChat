@@ -136,7 +136,7 @@ const embeddedAuth = async (req, res, next) => {
   // Skip if not embedded mode
   const isEmbedded = req.query.embedded === 'true' || req.headers['x-embedded-mode'] === 'true';
   
-  logger.info(`[embeddedAuth] Request received: path=${req.path}, isEmbedded=${isEmbedded}, hasEmbeddedQuery=${req.query.embedded === 'true'}, hasWorkspaceCookieQuery=${!!req.query.workspace_cookie}, workspaceCookieQueryLength=${req.query.workspace_cookie?.length || 0}, hasCookieHeader=${!!req.headers.cookie}, hasUser=${!!req.user}, userId=${req.user?._id?.toString() || req.user?.id?.toString() || 'none'}, queryParams=${Object.keys(req.query).join(',')}`);
+  logger.info(`[embeddedAuth] 📥 Request received: path=${req.path}, isEmbedded=${isEmbedded}, hasEmbeddedQuery=${req.query.embedded === 'true'}, hasWorkspaceCookieQuery=${!!req.query.workspace_cookie}, workspaceCookieQueryLength=${req.query.workspace_cookie?.length || 0}, hasCookieHeader=${!!req.headers.cookie}, hasUser=${!!req.user}, userId=${req.user?._id?.toString() || req.user?.id?.toString() || 'none'}, queryParams=${Object.keys(req.query).join(',')}, userAgent=${req.headers['user-agent']?.substring(0, 50) || 'unknown'}`);
   
   if (!isEmbedded) {
     logger.debug('[embeddedAuth] Skipping - not embedded mode');
@@ -223,28 +223,32 @@ const embeddedAuth = async (req, res, next) => {
       // Store workspace cookie for MCP forwarding
       // This is needed because API requests from iframe don't include the workspace cookie
       const userId = user._id?.toString() || user.id?.toString();
-      logger.info('[embeddedAuth] Found/created user. User object:', {
+      logger.info('[embeddedAuth] ✅ Found/created user. User object:', {
         _id: user._id?.toString(),
         id: user.id?.toString(),
         email: user.email,
         userId: userId
       });
       storeWorkspaceCookie(userId, workspaceCookie);
-      logger.info(`[embeddedAuth] Stored workspace cookie for user: ${user.email}, userId: ${userId}`);
+      logger.info(`[embeddedAuth] 🍪 Stored workspace cookie for user: ${user.email}, userId: ${userId}, cookieLength: ${workspaceCookie.length}`);
       
       // Check if we already have valid LibreChat tokens
       const existingToken = parsedCookies.token;
       if (!existingToken) {
         // Set JWT tokens so frontend recognizes authentication
         // This prevents redirect to login/OIDC
-        await setAuthTokens(user._id, res);
-        logger.info('[embeddedAuth] Set auth tokens for embedded user:', user.email);
+        // Use isEmbedded: true to set cookies with SameSite=None for cross-origin iframes (incognito mode)
+        logger.info(`[embeddedAuth] 🔐 Calling setAuthTokens with isEmbedded=true for user: ${user.email}, userId: ${user._id?.toString() || user.id?.toString()}`);
+        await setAuthTokens(user._id, res, null, { isEmbedded: true });
+        logger.info(`[embeddedAuth] ✅ Auth tokens set for embedded user: ${user.email}`);
+      } else {
+        logger.info(`[embeddedAuth] ℹ️ User already has auth token, skipping token setup for: ${user.email}`);
       }
       
-      logger.debug('[embeddedAuth] Authenticated embedded user:', user.email);
+      logger.info(`[embeddedAuth] ✅ Successfully authenticated embedded user: ${user.email}, userId: ${userId}, hasAuthTokens: ${!!existingToken || 'will be set'}`);
     }
   } catch (error) {
-    logger.error('[embeddedAuth] Error finding/creating user:', error);
+    logger.error('[embeddedAuth] ❌ Error finding/creating user:', error);
   }
 
   next();
