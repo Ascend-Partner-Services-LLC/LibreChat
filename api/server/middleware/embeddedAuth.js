@@ -135,7 +135,21 @@ async function findOrCreateUser(workspaceUser) {
 const embeddedAuth = async (req, res, next) => {
   // Skip if not embedded mode
   const isEmbedded = req.query.embedded === 'true' || req.headers['x-embedded-mode'] === 'true';
+  
+  logger.info('[embeddedAuth] Request received:', {
+    path: req.path,
+    isEmbedded,
+    hasEmbeddedQuery: req.query.embedded === 'true',
+    hasEmbeddedHeader: req.headers['x-embedded-mode'] === 'true',
+    hasWorkspaceCookieQuery: !!req.query.workspace_cookie,
+    workspaceCookieQueryLength: req.query.workspace_cookie?.length || 0,
+    hasCookieHeader: !!req.headers.cookie,
+    hasUser: !!req.user,
+    userId: req.user?._id?.toString() || req.user?.id?.toString() || 'none'
+  });
+  
   if (!isEmbedded) {
+    logger.debug('[embeddedAuth] Skipping - not embedded mode');
     return next();
   }
 
@@ -145,32 +159,60 @@ const embeddedAuth = async (req, res, next) => {
   let workspaceCookie = req.query.workspace_cookie;
   let parsedCookies = {};
   
+  logger.info('[embeddedAuth] Checking for workspace cookie:', {
+    fromQueryParam: !!workspaceCookie,
+    queryParamLength: workspaceCookie?.length || 0
+  });
+  
   if (!workspaceCookie) {
     const cookieHeader = req.headers.cookie;
     if (cookieHeader) {
       parsedCookies = cookies.parse(cookieHeader);
       workspaceCookie = parsedCookies._workspacex_key;
+      logger.info('[embeddedAuth] Checked cookie header:', {
+        hasCookieHeader: true,
+        cookieKeys: Object.keys(parsedCookies),
+        foundWorkspaceCookie: !!workspaceCookie,
+        workspaceCookieLength: workspaceCookie?.length || 0
+      });
+    } else {
+      logger.info('[embeddedAuth] No cookie header present');
     }
   }
   
   // If user is already authenticated but we have a workspace cookie, store it for MCP forwarding
   if (req.user && workspaceCookie) {
     const userId = req.user._id?.toString() || req.user.id?.toString();
-    logger.info('[embeddedAuth] User already authenticated. User object:', {
+    logger.info('[embeddedAuth] ✅ User already authenticated with workspace cookie. User object:', {
       _id: req.user._id?.toString(),
       id: req.user.id?.toString(),
       email: req.user.email,
-      userId: userId
+      userId: userId,
+      userIdType: typeof userId,
+      userIdLength: userId?.length || 0
     });
-    storeWorkspaceCookie(userId, workspaceCookie);
-    logger.info('[embeddedAuth] Stored workspace cookie for already-authenticated user:', req.user.email, 'userId:', userId, 'cookie length:', workspaceCookie.length, 'source:', req.query.workspace_cookie ? 'query-param' : 'cookie-header');
+    
+    if (!userId) {
+      logger.error('[embeddedAuth] ❌ Cannot store cookie - no valid user ID found!', {
+        userObject: JSON.stringify(req.user, null, 2)
+      });
+    } else {
+      storeWorkspaceCookie(userId, workspaceCookie);
+      logger.info('[embeddedAuth] ✅ Stored workspace cookie for already-authenticated user:', req.user.email, 'userId:', userId, 'cookie length:', workspaceCookie.length, 'source:', req.query.workspace_cookie ? 'query-param' : 'cookie-header');
+    }
     return next();
   }
   
   if (!workspaceCookie) {
-    logger.debug('[embeddedAuth] No workspace cookie found (checked query param and cookie header)');
+    logger.warn('[embeddedAuth] ⚠️ No workspace cookie found (checked query param and cookie header)', {
+      hasUser: !!req.user,
+      userId: req.user?._id?.toString() || req.user?.id?.toString() || 'none',
+      queryParams: Object.keys(req.query),
+      cookieHeaderPresent: !!req.headers.cookie
+    });
     // If user is already authenticated, continue (don't block)
     if (req.user) {
+      logger.info('[embeddedAuth] User authenticated but no workspace cookie - continuing anyway');
       return next();
     }
     return next();
