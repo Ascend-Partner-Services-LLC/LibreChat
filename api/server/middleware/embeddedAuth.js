@@ -31,15 +31,26 @@ const workspaceCookieStore = new Map();
  * Used by MCP forwarding when the API request doesn't have the cookie
  */
 function getStoredWorkspaceCookie(userId) {
+  logger.info('[embeddedAuth] getStoredWorkspaceCookie called for userId:', userId, 'type:', typeof userId);
+  logger.info('[embeddedAuth] Current store keys:', Array.from(workspaceCookieStore.keys()));
+  
   const stored = workspaceCookieStore.get(userId);
   if (stored && Date.now() - stored.timestamp < CACHE_TTL) {
-    logger.debug('[embeddedAuth] Retrieved stored workspace cookie for user:', userId, 'age:', Date.now() - stored.timestamp, 'ms');
+    const age = Date.now() - stored.timestamp;
+    logger.info('[embeddedAuth] ✅ Retrieved stored workspace cookie for user:', userId, 'age:', age, 'ms', 'cookie length:', stored.cookie?.length || 0);
     return stored.cookie;
   }
   if (stored) {
-    logger.debug('[embeddedAuth] Stored cookie expired for user:', userId, 'age:', Date.now() - stored.timestamp, 'ms');
+    const age = Date.now() - stored.timestamp;
+    logger.warn('[embeddedAuth] ⚠️ Stored cookie expired for user:', userId, 'age:', age, 'ms (TTL:', CACHE_TTL, 'ms)');
   } else {
-    logger.debug('[embeddedAuth] No stored cookie found for user:', userId);
+    logger.warn('[embeddedAuth] ❌ No stored cookie found for user:', userId);
+    // Try to find similar keys (in case of format mismatch)
+    const allKeys = Array.from(workspaceCookieStore.keys());
+    const similarKeys = allKeys.filter(key => key.includes(userId) || userId.includes(key));
+    if (similarKeys.length > 0) {
+      logger.warn('[embeddedAuth] Found similar keys in store:', similarKeys);
+    }
   }
   return null;
 }
@@ -48,7 +59,9 @@ function getStoredWorkspaceCookie(userId) {
  * Store workspace cookie for a user
  */
 function storeWorkspaceCookie(userId, cookie) {
+  logger.info('[embeddedAuth] 🔐 Storing workspace cookie for userId:', userId, 'type:', typeof userId, 'cookie length:', cookie?.length || 0);
   workspaceCookieStore.set(userId, { cookie, timestamp: Date.now() });
+  logger.info('[embeddedAuth] Store now contains', workspaceCookieStore.size, 'entries. Keys:', Array.from(workspaceCookieStore.keys()));
 }
 
 /**
@@ -142,8 +155,15 @@ const embeddedAuth = async (req, res, next) => {
   
   // If user is already authenticated but we have a workspace cookie, store it for MCP forwarding
   if (req.user && workspaceCookie) {
-    storeWorkspaceCookie(req.user._id.toString(), workspaceCookie);
-    logger.info('[embeddedAuth] Stored workspace cookie for already-authenticated user:', req.user.email, 'cookie length:', workspaceCookie.length, 'source:', req.query.workspace_cookie ? 'query-param' : 'cookie-header');
+    const userId = req.user._id?.toString() || req.user.id?.toString();
+    logger.info('[embeddedAuth] User already authenticated. User object:', {
+      _id: req.user._id?.toString(),
+      id: req.user.id?.toString(),
+      email: req.user.email,
+      userId: userId
+    });
+    storeWorkspaceCookie(userId, workspaceCookie);
+    logger.info('[embeddedAuth] Stored workspace cookie for already-authenticated user:', req.user.email, 'userId:', userId, 'cookie length:', workspaceCookie.length, 'source:', req.query.workspace_cookie ? 'query-param' : 'cookie-header');
     return next();
   }
   
@@ -181,8 +201,15 @@ const embeddedAuth = async (req, res, next) => {
       
       // Store workspace cookie for MCP forwarding
       // This is needed because API requests from iframe don't include the workspace cookie
-      storeWorkspaceCookie(user._id.toString(), workspaceCookie);
-      logger.info('[embeddedAuth] Stored workspace cookie for user:', user.email);
+      const userId = user._id?.toString() || user.id?.toString();
+      logger.info('[embeddedAuth] Found/created user. User object:', {
+        _id: user._id?.toString(),
+        id: user.id?.toString(),
+        email: user.email,
+        userId: userId
+      });
+      storeWorkspaceCookie(userId, workspaceCookie);
+      logger.info('[embeddedAuth] Stored workspace cookie for user:', user.email, 'userId:', userId);
       
       // Check if we already have valid LibreChat tokens
       const existingToken = parsedCookies.token;

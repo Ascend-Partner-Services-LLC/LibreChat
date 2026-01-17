@@ -500,11 +500,37 @@ class AgentClient extends BaseClient {
         
         // Try request cookie first, fallback to stored cookie from embeddedAuth
         let promptWorkspaceCookie = this.options.req.cookies?._workspacex_key;
-        if (!promptWorkspaceCookie && this.options.req.user?.id) {
+        if (!promptWorkspaceCookie && this.options.req.user) {
           const { getStoredWorkspaceCookie } = require('~/server/middleware');
-          promptWorkspaceCookie = getStoredWorkspaceCookie(this.options.req.user.id.toString());
-          if (promptWorkspaceCookie) {
-            logger.info('[AgentClient] Using stored workspace cookie for MCP prompt');
+          const userObj = this.options.req.user;
+          const userIdFromId = userObj._id?.toString();
+          const userIdFromIdProp = userObj.id?.toString();
+          const userId = userIdFromId || userIdFromIdProp;
+          
+          logger.info('[AgentClient] [MCP Prompt] User object:', {
+            _id: userIdFromId,
+            id: userIdFromIdProp,
+            email: userObj.email,
+            selectedUserId: userId
+          });
+          
+          if (userId) {
+            // Try primary ID first
+            promptWorkspaceCookie = getStoredWorkspaceCookie(userId);
+            
+            // If not found and IDs are different, try the other one
+            if (!promptWorkspaceCookie && userIdFromId && userIdFromIdProp && userIdFromId !== userIdFromIdProp) {
+              logger.info('[AgentClient] [MCP Prompt] Primary lookup failed, trying alternative ID format');
+              promptWorkspaceCookie = getStoredWorkspaceCookie(userIdFromIdProp !== userId ? userIdFromIdProp : userIdFromId);
+            }
+            
+            if (promptWorkspaceCookie) {
+              logger.info('[AgentClient] ✅ Using stored workspace cookie for MCP prompt, user:', userId);
+            } else {
+              logger.warn('[AgentClient] ❌ No stored cookie found for MCP prompt, user:', userId, '(tried both _id and id formats)');
+            }
+          } else {
+            logger.warn('[AgentClient] ⚠️ No valid user ID found in user object for MCP prompt');
           }
         }
         
@@ -989,11 +1015,38 @@ class AgentClient extends BaseClient {
             
             // Fallback to stored cookie (from embeddedAuth initial page load)
             // This is needed because API requests from iframe don't include cross-origin cookies
-            if (!workspaceCookie && this.options.req.user?.id) {
+            if (!workspaceCookie && this.options.req.user) {
               const { getStoredWorkspaceCookie } = require('~/server/middleware');
-              workspaceCookie = getStoredWorkspaceCookie(this.options.req.user.id.toString());
-              if (workspaceCookie) {
-                console.log('[MCP Cookie Debug] Using stored workspace cookie from embeddedAuth');
+              // Try both _id and id formats (MongoDB documents have both)
+              const userObj = this.options.req.user;
+              const userIdFromId = userObj._id?.toString();
+              const userIdFromIdProp = userObj.id?.toString();
+              const userId = userIdFromId || userIdFromIdProp;
+              
+              console.log('[MCP Cookie Debug] User object:', {
+                _id: userIdFromId,
+                id: userIdFromIdProp,
+                email: userObj.email,
+                selectedUserId: userId
+              });
+              
+              if (userId) {
+                // Try primary ID first
+                workspaceCookie = getStoredWorkspaceCookie(userId);
+                
+                // If not found and IDs are different, try the other one
+                if (!workspaceCookie && userIdFromId && userIdFromIdProp && userIdFromId !== userIdFromIdProp) {
+                  console.log('[MCP Cookie Debug] Primary lookup failed, trying alternative ID format');
+                  workspaceCookie = getStoredWorkspaceCookie(userIdFromIdProp !== userId ? userIdFromIdProp : userIdFromId);
+                }
+                
+                if (workspaceCookie) {
+                  console.log('[MCP Cookie Debug] ✅ Using stored workspace cookie from embeddedAuth for user:', userId);
+                } else {
+                  console.log('[MCP Cookie Debug] ❌ No stored cookie found for user:', userId, '(tried both _id and id formats)');
+                }
+              } else {
+                console.log('[MCP Cookie Debug] ⚠️ No valid user ID found in user object');
               }
             }
             
