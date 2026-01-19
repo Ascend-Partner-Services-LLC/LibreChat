@@ -17,6 +17,8 @@ const { logger } = require('@librechat/data-schemas');
 const cookies = require('cookie');
 const { findUser, createUser, getUserById } = require('~/models');
 const { setAuthTokens } = require('~/server/services/AuthService');
+const { getAppConfig } = require('~/server/services/Config');
+const { getBalanceConfig } = require('@librechat/api');
 
 // Cache validated users to avoid repeated API calls
 const userCache = new Map();
@@ -119,6 +121,10 @@ async function findOrCreateUser(workspaceUser) {
   let user = await findUser({ email: workspaceUser.email });
 
   if (!user) {
+    // Get app config and balance config for new user creation
+    const appConfig = await getAppConfig();
+    const balanceConfig = getBalanceConfig(appConfig);
+    
     // Create new user for embedded access
     user = await createUser({
       email: workspaceUser.email,
@@ -126,8 +132,8 @@ async function findOrCreateUser(workspaceUser) {
       username: workspaceUser.email.split('@')[0],
       emailVerified: true, // Trust workspace auth
       provider: 'workspace', // Mark as workspace-authenticated user
-    });
-    logger.info('[embeddedAuth] Created new user for workspace user:', workspaceUser.email);
+    }, balanceConfig);
+    logger.info(`[embeddedAuth] Created new user for workspace user: ${workspaceUser.email} with balance config:`, balanceConfig);
   }
 
   // Cache the user
