@@ -50,26 +50,38 @@ mcpServers:
       ## ⚠️ CRITICAL: PERMISSION CHECK BEFORE SQL EXECUTION ⚠️
 
       **BEFORE running ANY SQL query, you MUST:**
-      1. Check if user context is provided in the system prompt (from workspace MCP)
-      2. If user context is available, extract:
+      1. **FIRST**: Check if user context is ALREADY provided in the system prompt (from workspace MCP)
+      2. **IF CONTEXT EXISTS**: REUSE it - DO NOT run user lookup queries. Extract from the prompt:
          - User's firm_id (e.g., LMC = 'b35cafe2-716e-4720-a23e-3b674f4406c5', TSA = '2d74137d-358d-4c3c-9337-f3f71246cb21')
          - User's permissions (permission_slugs)
          - User's access level
-      3. Verify the user has permission to access the data they're requesting
-      4. Apply appropriate WHERE clauses based on permissions and firm access rules
-      5. **For cross-firm access (e.g., LMC users accessing TSA clients):**
+      3. **IF NO CONTEXT**: Only then run the user lookup query below
+      4. Verify the user has permission to access the data they're requesting
+      5. Apply appropriate WHERE clauses based on permissions and firm access rules
+      6. **For cross-firm access (e.g., LMC users accessing TSA clients):**
          - LMC users (firm_id = 'b35cafe2-716e-4720-a23e-3b674f4406c5') have access to TSA clients (firm_id = '2d74137d-358d-4c3c-9337-f3f71246cb21')
          - Include BOTH firm_ids in your WHERE clause: `WHERE firm_id IN ('b35cafe2-716e-4720-a23e-3b674f4406c5', '2d74137d-358d-4c3c-9337-f3f71246cb21')`
          - Always verify cross-firm access before executing queries
 
-      **DO NOT execute SQL queries without first checking permissions and applying appropriate filters.**
+      **CRITICAL RULES:**
+      - DO NOT run user lookup queries if user context is already in the system prompt. REUSE the existing context.
+      - DO NOT re-display user verification messages if the user has already been greeted in the conversation.
+      - When user asks for data (e.g., "show me number of clients"), go directly to the data query - do NOT re-verify identity.
+      - DO NOT execute SQL queries without first checking permissions and applying appropriate filters.
 
       ## USER CONTEXT INITIALIZATION
 
-      **IMPORTANT**: If the user's identity and access level are ALREADY shown in the system prompt (from workspace MCP), 
-      DO NOT run the SQL query below - the context is already loaded. Extract the user's firm_id and permissions from the prompt and use them for all queries.
+      **CRITICAL RULE**: If the user's identity, firm, role, and access level are ALREADY shown in the system prompt (from workspace MCP), 
+      DO NOT run ANY user lookup queries. The context is already loaded - REUSE IT.
 
-      **ONLY run the lookup query if** no user context is provided in the system prompt:
+      **DO NOT run the user lookup query below if you see ANY of these in the system prompt:**
+      - User's name (e.g., "Hi Service!")
+      - User's role (e.g., "firm_staff @ LMC")
+      - User's firm (e.g., "Firm: LMC")
+      - User's access level (e.g., "Firm - Non-Sensitive Only")
+      - User's permissions or firm_id
+
+      **ONLY run the lookup query if** NO user context is provided in the system prompt (completely missing):
 
       1. Look up the current user's permissions by running this query:
 
@@ -101,7 +113,9 @@ mcpServers:
       | client.firm.non_sensitive.read | FIRM - NON-SENSITIVE | WHERE firm_id = '<firm_id>' AND is_sensitive = false |
       | client.firm.non_sensitive_consented.read | FIRM - CONSENTED ONLY | WHERE firm_id = '<firm_id>' AND is_sensitive = false AND is_7216_consented = true |
 
-      4. Display the following disclaimer/message to the user (customize based on their access level):
+      4. **ONLY IF NO USER CONTEXT WAS IN SYSTEM PROMPT**: Display the following disclaimer/message to the user (customize based on their access level):
+
+      **IMPORTANT**: If user context was already provided in the system prompt, DO NOT display this verification message again. The user has already been greeted and their context is loaded.
 
       ---
 
