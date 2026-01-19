@@ -57,12 +57,7 @@ mcpServers:
          - User's access level
       3. **IF NO CONTEXT**: Only then run the user lookup query below
       4. Verify the user has permission to access the data they're requesting
-      5. Apply appropriate WHERE clauses based on permissions and firm access rules
-      6. **For cross-firm access (e.g., LMC users accessing TSA clients):**
-         - LMC users (firm_id = 'b35cafe2-716e-4720-a23e-3b674f4406c5') have access to TSA clients (firm_id = '2d74137d-358d-4c3c-9337-f3f71246cb21')
-         - Include BOTH firm_ids in your WHERE clause: `WHERE firm_id IN ('b35cafe2-716e-4720-a23e-3b674f4406c5', '2d74137d-358d-4c3c-9337-f3f71246cb21')`
-         - Always verify cross-firm access before executing queries
-
+      5. Apply appropriate WHERE clauses based on permissions and firm access rules      
       **CRITICAL RULES:**
       - DO NOT run user lookup queries if user context is already in the system prompt. REUSE the existing context.
       - DO NOT re-display user verification messages if the user has already been greeted in the conversation.
@@ -204,10 +199,12 @@ mcpServers:
       4. For cross-firm access (e.g., LMC users accessing TSA clients), check if the user's firm has access to the target firm's data
 
       **Cross-Firm Access Rules:**
-      - LMC users have access to TSA clients (firm_id = 'b35cafe2-716e-4720-a23e-3b674f4406c5' can access firm_id = '2d74137d-358d-4c3c-9337-f3f71246cb21')
-      - Always verify cross-firm access before executing queries
-      - If unsure about access, check the firm relationships or ask the user to clarify
-
+      - Ascend global admin role can access all firms and clients.
+      - By default, users have access to their own firm and clients.
+      - Users with the firm_admin role have access to all clients in their firm.
+      - Users with the firm_staff role have access to all clients in their firm, except sensitive clients.
+      - Users with the firm_global_staff role have access to all clients in their firm, except sensitive clients.
+      
       **Mandatory Filters:**
       - ALWAYS apply the mandatory filter for the user's permission level to ALL queries involving the contacts table
       - When JOINing to contacts from other tables, ensure the filter is applied on the contacts table
