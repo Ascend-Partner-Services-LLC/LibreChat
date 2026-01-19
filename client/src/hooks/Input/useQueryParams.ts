@@ -292,7 +292,11 @@ export default function useQueryParams({
         mcpPromptRef.current = null; // Clear after use
 
         const newUrl = window.location.pathname;
-        window.history.replaceState({}, '', newUrl);
+        // Don't create history entries in embedded mode (MemoryRouter handles routing internally)
+        const isEmbedded = new URLSearchParams(window.location.search).get('embedded') === 'true';
+        if (!isEmbedded) {
+          window.history.replaceState({}, '', newUrl);
+        }
 
         console.log('Message submitted with conversation state:', conversation);
       }
@@ -388,9 +392,13 @@ export default function useQueryParams({
         clearInterval(intervalId);
 
         // Only clean URL if there's no pending submission
+        // Don't create history entries in embedded mode (MemoryRouter handles routing internally)
         if (!pendingSubmitRef.current) {
-          const newUrl = window.location.pathname;
-          window.history.replaceState({}, '', newUrl);
+          const isEmbedded = new URLSearchParams(window.location.search).get('embedded') === 'true';
+          if (!isEmbedded) {
+            const newUrl = window.location.pathname;
+            window.history.replaceState({}, '', newUrl);
+          }
         }
       };
 

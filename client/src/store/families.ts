@@ -126,7 +126,11 @@ const conversationByIndex = atomFamily<TConversation | null, string | number>({
           const newParams = createChatSearchParams(newValue);
           const searchParams = createSearchParams(newParams);
           const url = `${window.location.pathname}?${searchParams.toString()}`;
-          window.history.pushState({}, '', url);
+          // Don't create history entries in embedded mode (MemoryRouter handles routing internally)
+          const isEmbedded = new URLSearchParams(window.location.search).get('embedded') === 'true';
+          if (!isEmbedded) {
+            window.history.pushState({}, '', url);
+          }
         }
       });
     },
