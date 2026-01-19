@@ -57,10 +57,17 @@ function getStoredWorkspaceCookie(userId) {
 
 /**
  * Store workspace cookie for a user
+ * Normalizes cookie to store only the value part (without _workspacex_key= prefix)
  */
 function storeWorkspaceCookie(userId, cookie) {
-  logger.info(`[embeddedAuth] 🔐 Storing workspace cookie for userId: ${userId}, type: ${typeof userId}, cookie length: ${cookie?.length || 0}`);
-  workspaceCookieStore.set(userId, { cookie, timestamp: Date.now() });
+  // Normalize: extract just the value part (remove _workspacex_key= prefix if present)
+  let cookieValue = cookie;
+  if (cookie && cookie.startsWith('_workspacex_key=')) {
+    cookieValue = cookie.substring('_workspacex_key='.length);
+  }
+  
+  logger.info(`[embeddedAuth] 🔐 Storing workspace cookie for userId: ${userId}, type: ${typeof userId}, cookie length: ${cookieValue?.length || 0}`);
+  workspaceCookieStore.set(userId, { cookie: cookieValue, timestamp: Date.now() });
   logger.info(`[embeddedAuth] Store now contains ${workspaceCookieStore.size} entries. Keys: ${Array.from(workspaceCookieStore.keys()).join(', ')}`);
 }
 

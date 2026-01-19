@@ -1050,7 +1050,14 @@ class AgentClient extends BaseClient {
               }
             }
             
-            const hasCookie = !!workspaceCookie;
+            // Normalize cookie value: ensure we only pass the value part (not the full "_workspacex_key=value" string)
+            // req.cookies._workspacex_key is already just the value, but getStoredWorkspaceCookie might return the full string
+            let cookieValue = workspaceCookie;
+            if (cookieValue && cookieValue.startsWith('_workspacex_key=')) {
+              cookieValue = cookieValue.substring('_workspacex_key='.length);
+            }
+            
+            const hasCookie = !!cookieValue;
             console.log(`[MCP Cookie Debug] req.cookies keys: ${Object.keys(this.options.req.cookies || {}).join(', ')}`);
             console.log(`[MCP Cookie Debug] _workspacex_key present: ${hasCookie} (from ${workspaceCookie ? (this.options.req.cookies?._workspacex_key ? 'request' : 'stored') : 'none'})`);
             return {
@@ -1058,8 +1065,9 @@ class AgentClient extends BaseClient {
             conversationId: this.conversationId,
             parentMessageId: this.parentMessageId,
               // Forward workspace cookie to MCP servers for authentication
+              // Pass only the value part - MCP client will format it as "_workspacex_key=value"
               mcpCookies: hasCookie
-                ? { _workspacex_key: workspaceCookie }
+                ? { _workspacex_key: cookieValue }
                 : undefined,
             };
           })(),
