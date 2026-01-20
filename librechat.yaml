@@ -245,12 +245,16 @@ mcpServers:
         - [engagements](#engagements)
         - [service_lines](#service_lines)
         - [opportunities](#opportunities)
-      4. [Relationships & Assignments](#relationships--assignments)
+      4. [Re-Engagement System](#re-engagement-system)
+        - [re_engagement_lists](#re_engagement_lists)
+        - [re_engagement_groups](#re_engagement_groups)
+        - [re_engagement_group_notes](#re_engagement_group_notes)
+      5. [Relationships & Assignments](#relationships--assignments)
         - [contact_employee_assignments](#contact_employee_assignments)
         - [contact_group_manager_assignments](#contact_group_manager_assignments)
         - [contact_relationships](#contact_relationships)
-      5. [Common Enum Values](#common-enum-values)
-      6. [Key Relationships](#key-relationships)
+      6. [Common Enum Values](#common-enum-values)
+      7. [Key Relationships](#key-relationships)
 
       ---
 
@@ -738,6 +742,84 @@ mcpServers:
 
       ---
 
+      ## Re-Engagement System
+
+      ### re_engagement_lists
+
+      Re-engagement lists - one per firm. Represents a collection of client groups that need to be re-engaged.
+
+      | Column | Type | Description |
+      |--------|------|-------------|
+      | id | uuid (PK) | Primary key |
+      | firm_id | uuid (FK) | References firms(id) (required, unique per firm) |
+      | description | text | List description |
+      | updated_by_id | uuid (FK) | References employees(id) |
+      | inserted_at | utc_datetime | Created timestamp |
+      | updated_at | utc_datetime | Updated timestamp |
+
+      ---
+
+      ### re_engagement_groups
+
+      Individual client groups on re-engagement lists. Represents a client group that needs to be re-engaged, including their status, assigned employees, and outcome.
+
+      | Column | Type | Description |
+      |--------|------|-------------|
+      | id | uuid (PK) | Primary key |
+      | re_engagement_list_id | uuid (FK) | References re_engagement_lists(id) (required) |
+      | group_id | uuid (FK) | References contact_groups(id) (nullable) |
+      | group_name | varchar | Group name (required) |
+      | group_type | varchar | Group type (default: "client_group") |
+      | engagement_letter | varchar | Engagement letter status (default: "not_applicable") |
+      | outreach | boolean | Whether outreach is enabled (default: true) |
+      | outreach_status | varchar | Current outreach status (default: "not_contacted") |
+      | outreach_status_changed_at | utc_datetime | Timestamp when outreach status was last changed |
+      | assigned_employee_ids | uuid[] | Array of assigned employee IDs (default: []) |
+      | outcome | jsonb | Structured outcome data for completed engagements |
+      | ytd_wip_amount | decimal(15,2) | Year-to-date Work In Progress amount |
+      | ytd_wip_updated_at | utc_datetime | Timestamp when WIP was last updated |
+      | updated_by_id | uuid (FK) | References employees(id) |
+      | inserted_at | utc_datetime | Created timestamp |
+      | updated_at | utc_datetime | Updated timestamp |
+
+      **engagement_letter statuses:**
+      - `not_applicable` - Not applicable
+      - `not_sent` - Not sent
+      - `sent` - Sent
+      - `received` - Received
+      - `signed` - Signed
+      - `canceled` - Canceled
+
+      **outreach_status values:**
+      - `not_applicable` - Not applicable (when outreach = false)
+      - `not_contacted` - Not contacted
+      - `reached_out` - Reached out
+      - `conversation_scheduled` - Conversation scheduled
+      - `conversation_complete` - Conversation complete
+      - `additional_conversation_remaining` - Additional conversation remaining
+
+      **Constraints:**
+      - Unique constraint on (re_engagement_list_id, group_id)
+      - When outreach = false, outreach_status must be 'not_applicable'
+      - When outreach = true, outreach_status must be one of: 'not_contacted', 'reached_out', 'conversation_scheduled', 'conversation_complete', 'additional_conversation_remaining'
+
+      ---
+
+      ### re_engagement_group_notes
+
+      Notes attached to re-engagement groups. Multiple notes can be added per group.
+
+      | Column | Type | Description |
+      |--------|------|-------------|
+      | id | uuid (PK) | Primary key |
+      | re_engagement_group_id | uuid (FK) | References re_engagement_groups(id) (required) |
+      | content | text | Note content (required) |
+      | created_by_id | uuid (FK) | References employees(id) (required) |
+      | inserted_at | naive_datetime | Created timestamp |
+      | updated_at | naive_datetime | Updated timestamp |
+
+      ---
+
       ## Relationships & Assignments
 
       ### contact_employee_assignments
@@ -941,6 +1023,14 @@ mcpServers:
                 │
                 ├──── engagements (firm_id, contact_id, service_line_id)
                 │
+                ├──── re_engagement_lists (firm_id)
+                │       │
+                │       └──── re_engagement_groups (re_engagement_list_id)
+                │               │
+                │               ├──── contact_groups (group_id)
+                │               │
+                │               └──── re_engagement_group_notes (re_engagement_group_id)
+                │
                 └──── projects (firm_id, client_id)
                         │
                         ├──── tax_documents (project_id)
@@ -1018,6 +1108,20 @@ mcpServers:
       LEFT JOIN contacts c ON cea.contact_id = c.id
       WHERE e.firm_id = 'your-firm-uuid'
         AND e.status = 'active';
+      ```
+
+      ### Get re-engagement groups with their assigned employees and notes
+      ```sql
+      SELECT reg.id, reg.group_name, reg.engagement_letter, reg.outreach_status,
+            reg.assigned_employee_ids, reg.ytd_wip_amount,
+            rel.description as list_description,
+            COUNT(regn.id) as note_count
+      FROM re_engagement_groups reg
+      JOIN re_engagement_lists rel ON reg.re_engagement_list_id = rel.id
+      LEFT JOIN re_engagement_group_notes regn ON reg.id = regn.re_engagement_group_id
+      WHERE rel.firm_id = 'your-firm-uuid'
+      GROUP BY reg.id, reg.group_name, reg.engagement_letter, reg.outreach_status,
+               reg.assigned_employee_ids, reg.ytd_wip_amount, rel.description;
       ```
 
       ---
