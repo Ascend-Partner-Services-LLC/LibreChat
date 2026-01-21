@@ -1,8 +1,11 @@
 import { useMemo } from 'react';
+import { useRecoilValue } from 'recoil';
 import { useMediaQuery, TooltipAnchor } from '@librechat/client';
 import { useOutletContext } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { getConfigDefaults, PermissionTypes, Permissions } from 'librechat-data-provider';
+import { format } from 'date-fns';
+import { parseISO } from 'date-fns';
 import type { ContextType } from '~/common';
 import { PresetsMenu, HeaderNewChat, OpenSidebar } from './Menus';
 import ModelSelector from './Menus/Endpoints/ModelSelector';
@@ -14,6 +17,7 @@ import AddMultiConvo from './AddMultiConvo';
 import { useHasAccess, useAuthContext } from '~/hooks';
 import { Coins } from 'lucide-react';
 import { cn } from '~/utils';
+import store from '~/store';
 
 const defaultInterface = getConfigDefaults().interface;
 
@@ -38,11 +42,25 @@ export default function Header() {
   });
 
   const isSmallScreen = useMediaQuery('(max-width: 768px)');
+  const conversation = useRecoilValue(store.conversationByIndex(0));
 
   // Fetch balance if enabled
   const balanceEnabled = !!isAuthenticated && !!startupConfig?.balance?.enabled;
   const { data: balanceData } = useGetUserBalance({ enabled: balanceEnabled });
   const tokenCredits = balanceData?.tokenCredits ?? 0;
+
+  // Format conversation timestamp
+  const conversationTimestamp = useMemo(() => {
+    if (!conversation?.updatedAt) {
+      return null;
+    }
+    try {
+      const date = parseISO(conversation.updatedAt);
+      return format(date, 'MMM d, yyyy h:mm a');
+    } catch {
+      return null;
+    }
+  }, [conversation?.updatedAt]);
   
   // Format balance with K unit (e.g., 7,460,933 -> "7,460K")
   const formatBalance = (credits: number): string => {
@@ -143,8 +161,14 @@ export default function Header() {
           </div>
         )}
       </div>
-      {/* Empty div for spacing */}
-      <div />
+      {/* Conversation timestamp in center */}
+      {conversationTimestamp && !isSmallScreen && (
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+          <span className="text-xs text-text-secondary">
+            {conversationTimestamp}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
