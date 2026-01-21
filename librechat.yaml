@@ -570,15 +570,34 @@ mcpServers:
 
       1. **Previous Year's Project Record**: Look for a separate project record for the same client with `tax_year = <current_year - 1>`:
          ```sql
-         SELECT id, name, tax_year, return_data_v1, return_data_v2, ...
+         -- Get last year's project (assuming current year is 2025)
+         SELECT 
+           id,
+           name,
+           tax_year,
+           return_data_v1->'payload' as return_payload,
+           return_data_v1->'metadata' as return_metadata
          FROM projects
-         WHERE client_id = '<current_client_id>'
-           AND tax_year = <last_year>  -- e.g., 2024 for 2025 projects
+         WHERE client_id = '<client_id>'
+           AND tax_year = 2024  -- last year
          ORDER BY inserted_at DESC
          LIMIT 1;
          ```
 
-      2. **Return Data Fields**: The parsed XML data is stored in the `return_data_v1` through `return_data_v9` JSONB fields:
+      2. **Previous Year Return ID from Current Project**: The current project's metadata may contain the previous year's return ID:
+         ```sql
+         -- Get previous year return ID from current project's metadata
+         SELECT 
+           id,
+           name,
+           tax_year,
+           metadata->>'previous_return_id' as previous_return_id,
+           metadata->>'previous_is_extended' as previous_extended
+         FROM projects
+         WHERE id = '<current_project_id>';
+         ```
+
+      3. **Return Data Fields**: The parsed XML data is stored in the `return_data_v1` through `return_data_v9` JSONB fields:
          ```sql
          SELECT 
            id,
