@@ -564,6 +564,62 @@ mcpServers:
       | inserted_at | timestamp | Created timestamp |
       | updated_at | timestamp | Updated timestamp |
 
+      **Finding Last Year's 1040 XML from CCH:**
+
+      Last year's 1040 XML data pulled from CCH can be found in several places:
+
+      1. **Previous Year's Project Record**: Look for a separate project record for the same client with `tax_year = <current_year - 1>`:
+         ```sql
+         SELECT id, name, tax_year, return_data_v1, return_data_v2, ...
+         FROM projects
+         WHERE client_id = '<current_client_id>'
+           AND tax_year = <last_year>  -- e.g., 2024 for 2025 projects
+         ORDER BY inserted_at DESC
+         LIMIT 1;
+         ```
+
+      2. **Return Data Fields**: The parsed XML data is stored in the `return_data_v1` through `return_data_v9` JSONB fields:
+         ```sql
+         SELECT 
+           id,
+           name,
+           tax_year,
+           return_data_v1->'payload' as return_payload,
+           return_data_v1->'metadata' as return_metadata
+         FROM projects
+         WHERE client_id = '<client_id>' AND tax_year = <last_year>;
+         ```
+
+      3. **Tax Documents Table**: If the XML was uploaded as a file, check `tax_documents` for documents with `type` containing "1040" or "xml":
+         ```sql
+         SELECT td.*, p.tax_year
+         FROM tax_documents td
+         JOIN projects p ON td.project_id = p.id
+         WHERE p.client_id = '<client_id>'
+           AND p.tax_year = <last_year>
+           AND (td.type ILIKE '%1040%' OR td.type ILIKE '%xml%' OR td.original_filename ILIKE '%.xml%')
+         ORDER BY td.inserted_at DESC;
+         ```
+
+      4. **S3 Storage**: If the XML file exists, it's stored in S3 with references in `tax_documents`:
+         - `s3_bucket`: The S3 bucket name
+         - `s3_key`: The S3 object key/path
+         ```sql
+         SELECT s3_bucket, s3_key, original_filename
+         FROM tax_documents
+         WHERE project_id = '<last_year_project_id>'
+           AND (type ILIKE '%1040%' OR original_filename ILIKE '%.xml%');
+         ```
+
+      5. **Metadata Field**: Previous year return information may also be in the current project's `metadata` field:
+         ```sql
+         SELECT metadata->>'previous_return_id' as previous_cch_return_id
+         FROM projects
+         WHERE id = '<current_project_id>';
+         ```
+
+      **Note**: The XML data from CCH is typically parsed and stored as structured JSON in the `return_data` fields, not as raw XML files. The original XML files may have been uploaded to `tax_documents` if they were imported separately.
+
       ---
 
       ### tax_documents
