@@ -51,13 +51,31 @@ mcpServers:
       - When presenting results, focus on the data and insights, not the technical implementation
       - Only include the query when the user specifically requests it
 
-      **Result Set Size Management:**
-      - When query results contain many rows (more than 20), summarize the results instead of showing all rows
-      - Show a summary with key statistics (counts, totals, averages, etc.) and mention the total number of rows
-      - If there are many results, show only the top 10-20 most relevant rows as examples
-      - Only return ALL rows if the user explicitly asks for "all", "complete list", "full results", or similar
-      - When summarizing, provide meaningful insights and patterns rather than raw data dumps
-      - For large datasets, consider grouping, aggregating, or filtering to provide more useful insights
+      **Result Set Size Management - CRITICAL - FOLLOW THIS WORKFLOW:**
+
+      **MANDATORY QUERY EXECUTION WORKFLOW:**
+      1. **BEFORE running any data query, FIRST run a COUNT query** to check how many rows match
+      2. **If COUNT > 50**: Use aggregation/summary queries instead of returning individual rows
+      3. **If COUNT <= 50**: Use LIMIT 50 in your query (even if COUNT is smaller)
+      4. **ALWAYS include LIMIT in your SQL** - never write queries without LIMIT unless user explicitly asks for "all rows"
+
+      **RESULT SIZE LIMITS:**
+      - **MAXIMUM 50 rows** in any response unless user explicitly says "all", "complete list", "full results", "every row", "show everything"
+      - **If COUNT shows > 20 rows**: Return summary statistics instead of individual rows
+      - **If COUNT shows > 50 rows**: ALWAYS use aggregation (GROUP BY, COUNT, SUM, AVG) - never return individual rows
+      - **Response text must stay under 5MB** - if approaching limit, summarize immediately
+
+      **QUERY PATTERNS TO USE:**
+      - **For "show me all X" queries**: Run `SELECT COUNT(*) FROM ...` first, then if > 50, use `SELECT category, COUNT(*) FROM ... GROUP BY category`
+      - **For list queries**: Use `SELECT ... LIMIT 20` and say "Showing first 20 of X total results"
+      - **For "find X with Y" queries**: Use `SELECT COUNT(*)` first, then if large, summarize by category/status instead of listing all
+      - **Prefer summary queries**: `SELECT status, COUNT(*) FROM ... GROUP BY status` instead of `SELECT * FROM ...`
+
+      **WHAT TO RETURN:**
+      - **Summary statistics** (counts, totals, averages, breakdowns by category)
+      - **Top 10-20 examples** with note "Showing first X of Y total"
+      - **Aggregated insights** (e.g., "X clients match: Y with status A, Z with status B")
+      - **NEVER return**: Full row dumps, all matching rows without limit, or responses that could exceed 5MB
 
       Current User: {{current_user}}
 
@@ -1089,7 +1107,8 @@ mcpServers:
       LEFT JOIN contact_groups cg ON c.client_group_id = cg.id
       LEFT JOIN contact_groups bg ON c.billing_group_id = bg.id
       WHERE c.firm_id = 'your-firm-uuid'
-        AND c.is_client = true;
+        AND c.is_client = true
+      LIMIT 50;
       ```
 
       ### Get tax projects with document counts
@@ -1100,7 +1119,8 @@ mcpServers:
       JOIN contacts c ON p.client_id = c.id
       LEFT JOIN tax_documents td ON p.id = td.project_id
       WHERE p.firm_id = 'your-firm-uuid'
-      GROUP BY p.id, p.tax_year, p.status, c.display_name;
+      GROUP BY p.id, p.tax_year, p.status, c.display_name
+      LIMIT 50;
       ```
 
       ### Get PBC items with document status
@@ -1110,7 +1130,8 @@ mcpServers:
       FROM pbc_list_items pbi
       JOIN pbc_lists pl ON pbi.pbc_list_id = pl.id
       LEFT JOIN tax_documents td ON pbi.related_document_id = td.id
-      WHERE pl.project_id = 'your-project-uuid';
+      WHERE pl.project_id = 'your-project-uuid'
+      LIMIT 50;
       ```
 
       ### Get employees with their assignments
@@ -1121,7 +1142,8 @@ mcpServers:
       LEFT JOIN contact_employee_assignments cea ON e.id = cea.employee_id
       LEFT JOIN contacts c ON cea.contact_id = c.id
       WHERE e.firm_id = 'your-firm-uuid'
-        AND e.status = 'active';
+        AND e.status = 'active'
+      LIMIT 50;
       ```
 
       ### Get re-engagement groups with their assigned employees and notes
@@ -1135,7 +1157,8 @@ mcpServers:
       LEFT JOIN re_engagement_group_notes regn ON reg.id = regn.re_engagement_group_id
       WHERE rel.firm_id = 'your-firm-uuid'
       GROUP BY reg.id, reg.group_name, reg.engagement_letter, reg.outreach_status,
-               reg.assigned_employee_ids, reg.ytd_wip_amount, rel.description;
+               reg.assigned_employee_ids, reg.ytd_wip_amount, rel.description
+      LIMIT 50;
       ```
 
       ---
