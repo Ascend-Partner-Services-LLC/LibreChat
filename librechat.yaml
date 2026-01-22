@@ -430,9 +430,9 @@ mcpServers:
       | is_7216_consented | boolean | 7216 consent status |
       | consented_7216_at | utc_datetime | Consent timestamp |
       | split_from_id | uuid (FK) | Split contact reference |
-      | partner_manager_id | uuid (FK) | Partner manager employee |
-      | relationship_manager_id | uuid (FK) | Relationship manager |
-      | billing_manager_id | uuid (FK) | Billing manager |
+      | partner_manager_id | uuid (FK) | ⚠️ DEPRECATED - DO NOT USE - Use contact_employee_assignments instead |
+      | relationship_manager_id | uuid (FK) | ⚠️ DEPRECATED - DO NOT USE - Use contact_employee_assignments instead |
+      | billing_manager_id | uuid (FK) | ⚠️ DEPRECATED - DO NOT USE - Use contact_employee_assignments instead |
       | created_by | uuid (FK) | Creator employee |
       | updated_by | uuid (FK) | Last updater employee |
       | inserted_at | utc_datetime | Created timestamp |
@@ -893,19 +893,50 @@ mcpServers:
 
       ### contact_employee_assignments
 
-      Links employees to contacts with specific roles.
+      ⚠️ **CRITICAL: This is the ONLY way to find client managers. DO NOT use partner_manager_id, relationship_manager_id, or billing_manager_id on contacts table.**
+
+      Links employees to contacts with specific roles. This table is the source of truth for all client manager assignments.
 
       | Column | Type | Description |
       |--------|------|-------------|
       | id | uuid (PK) | Primary key |
       | contact_id | uuid (FK) | References contacts(id) |
       | employee_id | uuid (FK) | References employees(id) |
-      | assignment_type | varchar | Role type (partner, manager, etc.) |
+      | assignment_name | varchar | ⚠️ **USE THIS** - Assignment type: 'Relationship Manager', 'Manager', 'Primary Partner', 'Billing Manager', 'Partner Manager' |
+      | assignment_type | varchar | Legacy field - prefer assignment_name |
       | is_primary | boolean | Primary assignment flag |
       | start_date | date | Assignment start |
       | end_date | date | Assignment end |
       | inserted_at | utc_datetime | Created timestamp |
       | updated_at | utc_datetime | Updated timestamp |
+
+      **To find client managers for a contact:**
+      ```sql
+      SELECT e.id, e.first_name, e.last_name, cea.assignment_name
+      FROM contact_employee_assignments cea
+      JOIN employees e ON cea.employee_id = e.id
+      WHERE cea.contact_id = '<contact_id>'
+        AND cea.assignment_name IN ('Relationship Manager', 'Manager', 'Primary Partner')
+      ORDER BY 
+        CASE cea.assignment_name
+          WHEN 'Relationship Manager' THEN 1
+          WHEN 'Manager' THEN 2
+          WHEN 'Primary Partner' THEN 3
+          ELSE 4
+        END;
+      ```
+
+      **To find projects without client managers:**
+      ```sql
+      SELECT p.id, p.name, p.tax_year
+      FROM projects p
+      JOIN contacts c ON p.client_id = c.id
+      LEFT JOIN contact_employee_assignments cea 
+        ON c.id = cea.contact_id
+        AND cea.assignment_name IN ('Relationship Manager', 'Manager', 'Primary Partner')
+      WHERE p.firm_id = '<firm_id>'
+        AND cea.id IS NULL;  -- No assignment found
+      ```
 
       ---
 
@@ -1123,12 +1154,27 @@ mcpServers:
 
       ### Manager Assignments
 
+      ⚠️ **CRITICAL: DO NOT use partner_manager_id, relationship_manager_id, or billing_manager_id on contacts table. These fields are deprecated.**
+
+      **Use contact_employee_assignments table instead:**
+
       ```
-      contacts ─────┬──── partner_manager_id ──────► employees
-                    │
-                    ├──── relationship_manager_id ─► employees
-                    │
-                    └──── billing_manager_id ──────► employees
+      contacts ────────► contact_employee_assignments (contact_id)
+                            │
+                            ├──── employee_id ──────► employees
+                            │
+                            └──── assignment_name ──► 'Relationship Manager', 'Manager', 'Primary Partner', etc.
+      ```
+
+      **Example query to find client manager:**
+      ```sql
+      SELECT e.first_name, e.last_name, cea.assignment_name
+      FROM contacts c
+      JOIN contact_employee_assignments cea ON c.id = cea.contact_id
+      JOIN employees e ON cea.employee_id = e.id
+      WHERE c.id = '<contact_id>'
+        AND cea.assignment_name IN ('Relationship Manager', 'Manager', 'Primary Partner')
+      LIMIT 1;
       ```
 
       ---
