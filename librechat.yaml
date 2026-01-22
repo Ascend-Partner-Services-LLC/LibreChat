@@ -564,42 +564,24 @@ mcpServers:
       | inserted_at | timestamp | Created timestamp |
       | updated_at | timestamp | Updated timestamp |
 
-      **Finding Last Year's 1040 XML from CCH:**
+      **Finding Previous Years' Tax Return XMLs:**
 
-      **IMPORTANT**: Last year's 1040 XML data from CCH is stored in the `return_data` fields (where parsed XML is stored). **ONLY check these fields** - do not search `tax_documents` table for XML files.
+      **IMPORTANT**: Previous years' tax return XML files are stored in **Amazon S3**, not in the database. The workspace-mcp server automatically fetches and includes these XMLs in the project context.
 
-      The parsed XML data is stored in the `return_data_v1` through `return_data_v9` JSONB fields in the `projects` table:
+      **How it works:**
+      - XML files are stored in S3 bucket: `prod-tax-documents-us`
+      - Path structure: `exports-xml/{firm_code}/{tax_year}/{client_id}/{client_sub_id}/{folder_letter}/`
+      - Folder letters are based on tax classification (e.g., "I" for 1040 individual, "P" for 1065 partnership)
+      - The workspace-mcp server automatically fetches past years' XMLs when building project context
+      - XMLs are listed in the project context under `past_years_xmls` field
 
-      1. **Get Last Year's Project with Return Data**:
-         ```sql
-         -- Get last year's project (assuming current year is 2025)
-         SELECT 
-           id,
-           name,
-           tax_year,
-           return_data_v1->'payload' as return_payload,
-           return_data_v1->'metadata' as return_metadata
-         FROM projects
-         WHERE client_id = '<client_id>'
-           AND tax_year = 2024  -- last year
-         ORDER BY inserted_at DESC
-         LIMIT 1;
-         ```
+      **For AI Agents:**
+      - When working with a tax project, the past years' XMLs are **already loaded** in the project context
+      - You do NOT need to query the database or S3 directly
+      - The XML file paths are provided in the project context prompt
+      - If you need to access the actual XML content, use the workspace-mcp `build_project_context` tool or ask the user
 
-      2. **Get Previous Year Return ID from Current Project Metadata**:
-         ```sql
-         -- Get previous year return ID from current project's metadata
-         SELECT 
-           id,
-           name,
-           tax_year,
-           metadata->>'previous_return_id' as previous_return_id,
-           metadata->>'previous_is_extended' as previous_extended
-         FROM projects
-         WHERE id = '<current_project_id>';
-         ```
-
-      **Note**: The CCH 1040 XML data is parsed and stored as structured JSON in the `return_data_v1` through `return_data_v9` fields. Check these fields only - do not search `tax_documents` for XML files.
+      **Note**: The `return_data_v1` through `return_data_v9` fields in the `projects` table contain parsed/structured JSON data from CCH, but the original XML files are stored in S3 and accessed via workspace-mcp.
 
       ---
 
