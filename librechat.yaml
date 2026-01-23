@@ -580,7 +580,8 @@ mcpServers:
 
       **How it works:**
       - XML files are stored in S3 bucket: `prod-tax-documents-us`
-      - Path structure: `exports-xml/{firm_code}/{tax_year}/{client_id}/{client_sub_id}/{folder_letter}/`
+      - Path structure: `exports-xml/{firm_code}/{year}/{folder_letter}/{year}{folder_letter}_{client_id}.{client_sub_id}_*.xml`
+      - Example: `exports-xml/lmc/2024/I/2024I_010010.0_V1_20251129_065356PM.xml`
       - Folder letters are based on tax classification (e.g., "I" for 1040 individual, "P" for 1065 partnership)
       - The workspace-mcp server automatically fetches past years' XMLs when building project context
       - XMLs are listed in the project context under `past_years_xmls` field
@@ -588,8 +589,9 @@ mcpServers:
       **For AI Agents:**
       - When working with a tax project, the past years' XMLs are **already loaded** in the project context
       - You do NOT need to query the database or S3 directly
+      - **DO NOT manually construct S3 paths** - always use the `get_past_year_xml` tool from workspace-mcp
       - The XML file paths are provided in the project context prompt
-      - If you need to access the actual XML content, use the workspace-mcp `build_project_context` tool or ask the user
+      - If you need to access the actual XML content, use the workspace-mcp `get_past_year_xml` tool to get file paths, then use the S3 MCP server to fetch content
 
       **Note**: The `return_data_v1` through `return_data_v9` fields in the `projects` table contain parsed/structured JSON data from CCH, but the original XML files are stored in S3 and accessed via workspace-mcp.
 
