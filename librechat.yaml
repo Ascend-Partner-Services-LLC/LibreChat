@@ -19,9 +19,11 @@ mcpSettings:
   allowedDomains:
     - 'host.docker.internal'    # Docker host access (required for Docker setups)
     - 'http://host.docker.internal:8000'  # Workspace MCP server
+    - 'http://host.docker.internal:3000'  # AWS S3 MCP server
     - 'http://host.docker.internal:8080'  # DBHub MCP server
     - 'localhost'                # Local development
     - 'http://localhost:8000'    # Local workspace MCP
+    - 'http://localhost:3000'    # Local AWS S3 MCP
     - 'http://localhost:8080'    # Local dbhub MCP
 
 # MCP Servers configuration
@@ -30,6 +32,14 @@ mcpServers:
     type: streamable-http
     url: http://host.docker.internal:8000/mcp
     timeout: 60000
+
+  aws-s3:
+    type: streamable-http
+    url: "http://host.docker.internal:3000/mcp"
+    requiresOAuth: false
+    timeout: 120000
+    serverInstructions: |
+     When returning trimmed files, make sure let the user know that the file has been trimmed, and they can ask to see anything else in the file in follow up questions.
 
   dbhub:
     type: streamable-http
