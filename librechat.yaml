@@ -562,27 +562,6 @@ mcpServers:
       | cch_submissions | jsonb[] | CCH submission history |
       | inserted_at | timestamp | Created timestamp |
       | updated_at | timestamp | Updated timestamp |
-
-      **Past Years' Tax Return Data:**
-
-      **IMPORTANT**: Past years' tax return summary data is automatically fetched from the backend API and included in the project context.
-
-      **How it works:**
-      - The workspace-mcp server automatically fetches past years' XML summaries when building project context
-      - Summary data includes key financial fields: total income, AGI, taxable income, total tax, wages, deductions, filing status
-      - This data is pre-extracted from XML files stored in S3 by the backend service
-      - The summary is included in the project context prompt under "Past Years' Tax Return XML Summary" section
-
-      **For AI Agents:**
-      - When working with a tax project, past years' tax return summaries are **already loaded** in the project context
-      - You do NOT need to query the database or fetch XML files
-      - You do NOT have access to raw XML file contents - only the pre-extracted summary fields
-      - When users ask for "xml" or "past year xml", they mean the summary data (not raw XML)
-      - The summary data is ready to reference immediately
-      - All available past year data is included in the summary section
-
-      **Note**: The `return_data_v1` through `return_data_v9` fields in the `projects` table contain parsed/structured JSON data from CCH.
-
       ---
 
       ### tax_documents
