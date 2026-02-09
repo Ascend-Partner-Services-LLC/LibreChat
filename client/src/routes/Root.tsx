@@ -27,7 +27,7 @@ export default function Root() {
   const [bannerHeight, setBannerHeight] = useState(0);
   const [navVisible, setNavVisible] = useState(() => {
     const savedNavVisible = localStorage.getItem('navVisible');
-    return savedNavVisible !== null ? JSON.parse(savedNavVisible) : true;
+    return savedNavVisible !== null ? JSON.parse(savedNavVisible) : false;
   });
 
   const { isAuthenticated, logout } = useAuthContext();
