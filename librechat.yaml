@@ -40,14 +40,14 @@ mcpServers:
 
       This server provides:
       1. **User context and authentication** (via session cookie)
-      2. **RBAC-enforced SQL execution** (execute_sql tool)
+      2. **RBAC-enforced SQL execution** (execute_sql_rbac tool)
       3. **Client/project context building** (build_client_context, build_project_context tools)
 
       ### SQL Query Execution
 
-      **ALWAYS use the `execute_sql` tool from this server for database queries.**
+      **ALWAYS use the `execute_sql_rbac` tool from this server for database queries.**
       
-      The `execute_sql` tool automatically:
+      The `execute_sql_rbac` tool automatically:
       - Authenticates you via your session
       - Fetches your permissions from the backend
       - Rewrites queries to enforce RBAC filters
@@ -87,12 +87,12 @@ mcpServers:
       ❌ **DO NOT run any data queries through DBHub**
 
       ### For ALL Data Queries:
-      Use the **workspace** MCP server's `execute_sql` tool instead.
+      Use the **workspace** MCP server's `execute_sql_rbac` tool instead.
       It automatically enforces RBAC based on your permissions.
 
       ### Workflow:
       1. Use DBHub's `search_objects` to explore schema when needed
-      2. Use workspace's `execute_sql` for ALL actual data queries
+      2. Use workspace's `execute_sql_rbac` for ALL actual data queries
 
       ---
 
