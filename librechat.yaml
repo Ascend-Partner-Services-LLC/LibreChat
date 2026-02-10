@@ -510,15 +510,21 @@ mcpServers:
 
       Client tax questionnaires attached to projects.
 
+      ⚠️ **DATA SOURCE WARNING:** This table contains **CLIENT SELF-REPORTED answers**, NOT actual extracted tax document data.
+      - Use this table ONLY to check what the **client said/answered** (e.g., "Did the client report having an Identity Protection PIN?").
+      - **NEVER** use questionnaire data to answer questions about actual tax amounts (W-2 wages, 1099 income, etc.).
+      - For actual tax document amounts, use `tax_documents` table or `build_project_context(project_id)` which includes extracted data.
+      - For prior year filed return data, use past year XML summary via `build_project_context(project_id)`.
+
       | Column | Type | Description |
       |--------|------|-------------|
       | id | uuid (PK) | Primary key |
       | project_id | uuid (FK) | References projects(id) |
       | status | enum | not_sent, not_seen_yet, in_progress, submitted |
-      | basic_info_fields | jsonb | Basic info section |
-      | income_fields | jsonb | Income section |
-      | deduction_fields | jsonb | Deductions section |
-      | final_details_fields | jsonb | Final details section |
+      | basic_info_fields | jsonb | Basic info section (self-reported) |
+      | income_fields | jsonb | Income section (self-reported, NOT extracted amounts) |
+      | deduction_fields | jsonb | Deductions section (self-reported) |
+      | final_details_fields | jsonb | Final details section (self-reported) |
       | carried_forward_data | jsonb | Prior year carryforward |
       | last_saved_at | utc_datetime | Client save timestamp |
       | submitted_at | utc_datetime | Submission timestamp |
