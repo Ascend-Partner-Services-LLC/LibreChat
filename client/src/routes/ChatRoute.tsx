@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Spinner } from '@librechat/client';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useRecoilCallback, useRecoilValue } from 'recoil';
 import { Constants, EModelEndpoint } from 'librechat-data-provider';
 import { useGetModelsQuery } from 'librechat-data-provider/react-query';
@@ -15,6 +15,7 @@ import temporaryStore from '~/store/temporary';
 import store from '~/store';
 
 export default function ChatRoute() {
+  const [searchParams] = useSearchParams();
   const { data: startupConfig } = useGetStartupConfig();
   const { isAuthenticated, user, roles } = useAuthRedirect();
 
@@ -72,14 +73,25 @@ export default function ChatRoute() {
     }
 
     if (conversationId === Constants.NEW_CONVO && endpointsQuery.data && modelsQuery.data) {
-      const result = getDefaultModelSpec(startupConfig);
-      const spec = result?.default ?? result?.last;
-      logger.log('conversation', 'ChatRoute, new convo effect', conversation);
-      newConversation({
-        modelsData: modelsQuery.data,
-        template: conversation ? conversation : undefined,
-        ...(spec ? { preset: getModelSpecPreset(spec) } : {}),
-      });
+      const urlAgentId = searchParams.get('agent_id')?.trim();
+      if (urlAgentId) {
+        // URL specifies an agent (e.g. workspace UI embedded panel) – use it so we don't overwrite with default spec later
+        logger.log('conversation', 'ChatRoute, new convo with URL agent_id', urlAgentId);
+        newConversation({
+          modelsData: modelsQuery.data,
+          template: conversation ?? undefined,
+          preset: { endpoint: EModelEndpoint.agents, agent_id: urlAgentId },
+        });
+      } else {
+        const result = getDefaultModelSpec(startupConfig);
+        const spec = result?.default ?? result?.last;
+        logger.log('conversation', 'ChatRoute, new convo effect', conversation);
+        newConversation({
+          modelsData: modelsQuery.data,
+          template: conversation ? conversation : undefined,
+          ...(spec ? { preset: getModelSpecPreset(spec) } : {}),
+        });
+      }
 
       hasSetConversation.current = true;
     } else if (initialConvoQuery.data && endpointsQuery.data && modelsQuery.data) {
@@ -97,14 +109,24 @@ export default function ChatRoute() {
       assistantListMap[EModelEndpoint.assistants] &&
       assistantListMap[EModelEndpoint.azureAssistants]
     ) {
-      const result = getDefaultModelSpec(startupConfig);
-      const spec = result?.default ?? result?.last;
-      logger.log('conversation', 'ChatRoute new convo, assistants effect', conversation);
-      newConversation({
-        modelsData: modelsQuery.data,
-        template: conversation ? conversation : undefined,
-        ...(spec ? { preset: getModelSpecPreset(spec) } : {}),
-      });
+      const urlAgentId = searchParams.get('agent_id')?.trim();
+      if (urlAgentId) {
+        logger.log('conversation', 'ChatRoute, new convo (assistants branch) with URL agent_id', urlAgentId);
+        newConversation({
+          modelsData: modelsQuery.data,
+          template: conversation ?? undefined,
+          preset: { endpoint: EModelEndpoint.agents, agent_id: urlAgentId },
+        });
+      } else {
+        const result = getDefaultModelSpec(startupConfig);
+        const spec = result?.default ?? result?.last;
+        logger.log('conversation', 'ChatRoute new convo, assistants effect', conversation);
+        newConversation({
+          modelsData: modelsQuery.data,
+          template: conversation ? conversation : undefined,
+          ...(spec ? { preset: getModelSpecPreset(spec) } : {}),
+        });
+      }
       hasSetConversation.current = true;
     } else if (
       assistantListMap[EModelEndpoint.assistants] &&

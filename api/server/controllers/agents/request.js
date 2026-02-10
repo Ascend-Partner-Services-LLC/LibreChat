@@ -8,11 +8,13 @@ const {
   sanitizeFileForTransmit,
   sanitizeMessageForTransmit,
   checkAndIncrementPendingRequest,
+  getBalanceConfig,
 } = require('@librechat/api');
 const { disposeClient, clientRegistry, requestDataMap } = require('~/server/cleanup');
 const { handleAbortError } = require('~/server/middleware');
 const { logViolation } = require('~/cache');
 const { saveMessage } = require('~/models');
+const { Balance } = require('~/db/models');
 
 function createCloseHandler(abortController) {
   return function (manual) {
@@ -50,6 +52,23 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
   } = req.body;
 
   const userId = req.user.id;
+
+  // Pre-send balance check: when balance is 0, return error so client can show it in chat
+  const balanceConfig = getBalanceConfig(req.config);
+  if (balanceConfig?.enabled) {
+    const balanceRecord = await Balance.findOne({ user: userId }).lean();
+    const balance = balanceRecord?.tokenCredits ?? 0;
+    if (balance <= 0) {
+      const tokenBalanceError = {
+        type: ViolationTypes.TOKEN_BALANCE,
+        balance,
+        tokenCost: 1,
+        promptTokens: 0,
+      };
+      await logViolation(req, res, ViolationTypes.TOKEN_BALANCE, tokenBalanceError, 0);
+      return res.status(402).json(tokenBalanceError);
+    }
+  }
 
   const { allowed, pendingRequests, limit } = await checkAndIncrementPendingRequest(userId);
   if (!allowed) {

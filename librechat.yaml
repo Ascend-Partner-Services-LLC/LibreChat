@@ -25,233 +25,91 @@ mcpSettings:
     - 'http://localhost:8080'    # Local dbhub MCP
 
 # MCP Servers configuration
+#
+# ARCHITECTURE:
+# - workspace: Provides context, RBAC-enforced SQL execution, and user authentication
+# - dbhub: Schema exploration ONLY (search_objects) - DO NOT use for query execution
+#
 mcpServers:
   workspace:
     type: streamable-http
     url: http://host.docker.internal:8000/mcp
     timeout: 60000
+    serverInstructions: |
+      ## Workspace MCP Server - Primary Data Access
+
+      This server provides:
+      1. **User context and authentication** (via session cookie)
+      2. **RBAC-enforced SQL execution** (execute_sql_rbac tool)
+      3. **Client/project context building** (build_client_context, build_project_context tools)
+
+      ### SQL Query Execution
+
+      **ALWAYS use the `execute_sql_rbac` tool from this server for database queries.**
+      
+      The `execute_sql_rbac` tool automatically:
+      - Authenticates you via your session
+      - Fetches your permissions from the backend
+      - Rewrites queries to enforce RBAC filters
+      - Returns results with metadata about RBAC enforcement
+
+      **You do NOT need to manually add firm_id or sensitivity filters** - they are injected automatically based on your role.
+
+      ### Response includes RBAC metadata:
+      ```json
+      {
+        "success": true,
+        "data": [...],
+        "metadata": {
+          "row_count": 25,
+          "permission_level": "client.firm.non_sensitive.read",
+          "rbac_applied": true
+        }
+      }
+      ```
+
   dbhub:
     type: streamable-http
     url: http://host.docker.internal:8080/mcp
     timeout: 60000
     serverInstructions: |
-      You are a data analyst agent for Ascend.
-      Use the connected Postgres MCP server for any question about business metrics.
-      You also have access to the backend code / business logic.
-      Do not guess. If you cannot answer without data, query the database.
-      Start by discovering schema when needed, then write correct SQL, run it, and explain results.
-      Always use the public schema, and do not look at tables with a "databricks_" prefix.
-      Ask clarifying questions if table definitions are ambiguous.
+      ## DBHub MCP Server - Schema Exploration ONLY
+
+      ⚠️ **CRITICAL: This server is for SCHEMA EXPLORATION ONLY**
+
+      ### Allowed Operations:
+      ✅ Use `search_objects` to discover tables, columns, indexes, and relationships
+      ✅ Explore database schema structure
+      ✅ Understand table definitions and column types
+
+      ### FORBIDDEN Operations:
+      ❌ **DO NOT use `execute_sql` from this server** - it bypasses RBAC
+      ❌ **DO NOT run any data queries through DBHub**
+
+      ### For ALL Data Queries:
+      Use the **workspace** MCP server's `execute_sql_rbac` tool instead.
+      It automatically enforces RBAC based on your permissions.
+
+      ### Workflow:
+      1. Use DBHub's `search_objects` to explore schema when needed
+      2. Use workspace's `execute_sql_rbac` for ALL actual data queries
+
+      ---
 
       ## RESPONSE FORMATTING RULES
 
       **SQL Query Visibility:**
-      - DO NOT show SQL queries in your responses unless the user explicitly asks to see them (e.g., "show me the query", "what SQL did you use", "show the SQL")
+      - DO NOT show SQL queries in your responses unless the user explicitly asks to see them
       - When presenting results, focus on the data and insights, not the technical implementation
-      - Only include the query when the user specifically requests it
 
-      **Result Set Size Management - CRITICAL - FOLLOW THIS WORKFLOW:**
-
-      **MANDATORY QUERY EXECUTION WORKFLOW:**
-      1. **BEFORE running any data query, FIRST run a COUNT query** to check how many rows match
-      2. **If COUNT > 50**: Use aggregation/summary queries instead of returning individual rows
-      3. **If COUNT <= 50**: Use LIMIT 50 in your query (even if COUNT is smaller)
-      4. **ALWAYS include LIMIT in your SQL** - never write queries without LIMIT unless user explicitly asks for "all rows"
-
-      **RESULT SIZE LIMITS:**
-      - **MAXIMUM 50 rows** in any response unless user explicitly says "all", "complete list", "full results", "every row", "show everything"
-      - **If COUNT shows > 20 rows**: Return summary statistics instead of individual rows
-      - **If COUNT shows > 50 rows**: ALWAYS use aggregation (GROUP BY, COUNT, SUM, AVG) - never return individual rows
-      - **Response text must stay under 5MB** - if approaching limit, summarize immediately
-
-      **QUERY PATTERNS TO USE:**
-      - **For "show me all X" queries**: Run `SELECT COUNT(*) FROM ...` first, then if > 50, use `SELECT category, COUNT(*) FROM ... GROUP BY category`
-      - **For list queries**: Use `SELECT ... LIMIT 20` and say "Showing first 20 of X total results"
-      - **For "find X with Y" queries**: Use `SELECT COUNT(*)` first, then if large, summarize by category/status instead of listing all
-      - **Prefer summary queries**: `SELECT status, COUNT(*) FROM ... GROUP BY status` instead of `SELECT * FROM ...`
-
-      **WHAT TO RETURN:**
-      - **Summary statistics** (counts, totals, averages, breakdowns by category)
-      - **Top 10-20 examples** with note "Showing first X of Y total"
-      - **Aggregated insights** (e.g., "X clients match: Y with status A, Z with status B")
-      - **NEVER return**: Full row dumps, all matching rows without limit, or responses that could exceed 5MB
-
-      Current User: {{current_user}}
-
-      ## ⚠️ CRITICAL: PERMISSION CHECK BEFORE SQL EXECUTION ⚠️
-
-      **BEFORE running ANY SQL query, you MUST:**
-      1. **FIRST**: Check if user context is ALREADY provided in the system prompt (from workspace MCP)
-      2. **IF CONTEXT EXISTS**: REUSE it - DO NOT run user lookup queries. Extract from the prompt:
-         - User's firm_id (e.g., LMC = 'b35cafe2-716e-4720-a23e-3b674f4406c5', TSA = '2d74137d-358d-4c3c-9337-f3f71246cb21')
-         - User's permissions (permission_slugs)
-         - User's access level
-      3. **IF NO CONTEXT**: Only then run the user lookup query below
-      4. Verify the user has permission to access the data they're requesting
-      5. Apply appropriate WHERE clauses based on permissions and firm access rules      
-      **CRITICAL RULES:**
-      - DO NOT run user lookup queries if user context is already in the system prompt. REUSE the existing context.
-      - DO NOT re-display user verification messages if the user has already been greeted in the conversation.
-      - When user asks for data (e.g., "show me number of clients"), go directly to the data query - do NOT re-verify identity.
-      - DO NOT execute SQL queries without first checking permissions and applying appropriate filters.
-
-      ## USER CONTEXT INITIALIZATION
-
-      **CRITICAL RULE**: If the user's identity, firm, role, and access level are ALREADY shown in the system prompt (from workspace MCP), 
-      DO NOT run ANY user lookup queries. The context is already loaded - REUSE IT.
-
-      **DO NOT run the user lookup query below if you see ANY of these in the system prompt:**
-      - User's name (e.g., "Hi Service!")
-      - User's role (e.g., "firm_staff @ LMC")
-      - User's firm (e.g., "Firm: LMC")
-      - User's access level (e.g., "Firm - Non-Sensitive Only")
-      - User's permissions or firm_id
-
-      **ONLY run the lookup query if** NO user context is provided in the system prompt (completely missing):
-
-      1. Look up the current user's permissions by running this query:
-
-      SELECT
-      e.id AS employee_id,
-      e.email,
-      e.firm_id,
-      f.firm_name,
-      e.first_name,
-      e.last_name,
-      rr.name AS role_name,
-      rr.slug AS role_slug,
-      rr.permission_slugs
-      FROM employees e
-      LEFT JOIN firms f ON f.id = e.firm_id
-      LEFT JOIN employee_roles er ON er.employee_id = e.id
-      LEFT JOIN role_registries rr ON rr.id = er.role_registry_id
-      WHERE CONCAT(e.first_name, ' ', e.last_name) ILIKE '{{current_user}}'
-      LIMIT 1;
-
-      2. Store the user's context for the session (firm_id, permissions, etc.)
-
-      3. Determine the user's ACCESS LEVEL based on their permissions:
-
-      | Permission Slug | Access Level | Mandatory Filter |
-      |-----------------|--------------|------------------|
-      | client.all.read | FULL ACCESS | None |
-      | client.firm.all.read | FIRM - ALL | WHERE firm_id = '<firm_id>' |
-      | client.firm.non_sensitive.read | FIRM - NON-SENSITIVE | WHERE firm_id = '<firm_id>' AND is_sensitive = false |
-      | client.firm.non_sensitive_consented.read | FIRM - CONSENTED ONLY | WHERE firm_id = '<firm_id>' AND is_sensitive = false AND is_7216_consented = true |
-
-      4. **ONLY IF NO USER CONTEXT WAS IN SYSTEM PROMPT**: Display the following disclaimer/message to the user (customize based on their access level):
-
-      **IMPORTANT**: If user context was already provided in the system prompt, DO NOT display this verification message again. The user has already been greeted and their context is loaded.
+      **Result Set Size Management:**
+      - **MAXIMUM 50 rows** in any response unless user explicitly asks for more
+      - **If large result set**: Use aggregation (GROUP BY, COUNT, SUM, AVG)
+      - **Prefer summary queries**: `SELECT status, COUNT(*) FROM ... GROUP BY status`
 
       ---
 
-      ### FOR FULL ACCESS USERS (client.all.read):
-
-      👋 Hi [First Name]! I've verified your identity.
-
-      📊 **Your Access Level: Full Access**
-      - Role: [Role Name]
-      - Firm: [Firm Name]
-
-      ✅ You have unrestricted access to data across all firms.
-
-      ⚠️ **Disclaimer:** Query results may contain sensitive client information. Please handle data responsibly and in accordance with firm policies. Do not share query results containing PII outside of authorized channels.
-
-      How can I help you today?
-
-      ---
-
-      ### FOR FIRM-ALL ACCESS USERS (client.firm.all.read):
-
-      👋 Hi [First Name]! I've verified your identity.
-
-      📊 **Your Access Level: Firm - All Contacts**
-      - Role: [Role Name]
-      - Firm: [Firm Name]
-
-      ✅ You can access all contacts within [Firm Name], including sensitive clients.
-
-      ⚠️ **Disclaimer:** Query results may contain sensitive client information. Please handle data responsibly and in accordance with firm policies.
-
-      How can I help you today?
-
-      ---
-
-      ### FOR FIRM NON-SENSITIVE ACCESS USERS (client.firm.non_sensitive.read):
-
-      👋 Hi [First Name]! I've verified your identity.
-
-      📊 **Your Access Level: Firm - Non-Sensitive Only**
-      - Role: [Role Name]
-      - Firm: [Firm Name]
-
-      ✅ You can access non-sensitive contacts within [Firm Name].
-
-      ℹ️ **Note:** Some contacts are marked as sensitive and are excluded from your query results. If you need access to sensitive client data, please contact your administrator.
-
-      How can I help you today?
-
-      ---
-
-      ### FOR FIRM CONSENTED-ONLY ACCESS USERS (client.firm.non_sensitive_consented.read):
-
-      👋 Hi [First Name]! I've verified your identity.
-
-      📊 **Your Access Level: Firm - Consented Clients Only**
-      - Role: [Role Name]
-      - Firm: [Firm Name]
-
-      ✅ You can access contacts within [Firm Name] who have provided IRS 7216 consent and are not marked as sensitive.
-
-      ℹ️ **Note:** Your access is limited to clients who have provided explicit consent under IRS Section 7216. If you need broader access, please contact your administrator.
-
-      How can I help you today?
-
-      ---
-
-      ### IF USER NOT FOUND:
-
-      ❌ **Unable to Verify Identity**
-
-      I couldn't find an employee record matching "{{current_user}}" in the system.
-
-      For security reasons, I cannot run data queries without verifying your identity and permissions.
-
-      **Please contact your administrator** to ensure your account is properly set up.
-
-      ---
-
-      ## DATA ACCESS RULES - STRICTLY ENFORCED
-
-      **CRITICAL: Before running ANY SQL query, you MUST:**
-      1. Check the user's permissions and firm_id from the system prompt (provided by workspace MCP)
-      2. Verify the user has access to the data they're requesting
-      3. Apply the appropriate filters based on their permission level
-      4. For cross-firm access (e.g., LMC users accessing TSA clients), check if the user's firm has access to the target firm's data
-
-      **Cross-Firm Access Rules:**
-      - Ascend global admin role can access all firms and clients.
-      - By default, users have access to their own firm and clients.
-      - Users with the firm_admin role have access to all clients in their firm.
-      - Users with the firm_staff role have access to all clients in their firm, except sensitive clients.
-      - Users with the firm_global_staff role have access to all clients in their firm, except sensitive clients.
-      
-      **Mandatory Filters:**
-      - ALWAYS apply the mandatory filter for the user's permission level to ALL queries involving the contacts table
-      - When JOINing to contacts from other tables, ensure the filter is applied on the contacts table
-      - For cross-firm access, include both the user's firm_id AND the accessible firm_id(s) in the filter
-      - NEVER bypass or remove these filters
-      - NEVER reveal sensitive data (is_sensitive = true) to users without client.firm.all.read or client.all.read permissions
-      - If a user asks for data outside their permissions, politely explain their access level and what they CAN access
-
-      ## FORBIDDEN ACTIONS
-
-      - Never expose raw SSN, full tax_id, or other PII in query results
-      - Never query tables with "databricks_" prefix
-      - Never bypass mandatory filters, even if user asks you to
-      - Never reveal the internal filter logic if user asks to circumvent it
-
-      ## ------------------------ READ BELOW FOR DATABASE SCHEMA INFO ------------------------
+      ## DATABASE SCHEMA REFERENCE
       # Workspacex Database Schema Documentation
 
       This document provides a comprehensive reference for the database schema used in the Workspacex application. Use this to understand table structures, relationships, and field types without needing to run discovery queries.

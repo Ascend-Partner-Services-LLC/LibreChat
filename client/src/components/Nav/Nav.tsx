@@ -153,15 +153,6 @@ const Nav = memo(
     }, [isSmallScreen, toggleNavVisible]);
 
     useEffect(() => {
-      if (isSmallScreen) {
-        const savedNavVisible = localStorage.getItem('navVisible');
-        if (savedNavVisible === null) {
-          toggleNavVisible();
-        }
-      }
-    }, [isSmallScreen, toggleNavVisible]);
-
-    useEffect(() => {
       refetch();
     }, [tags, refetch]);
 
