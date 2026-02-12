@@ -22,9 +22,12 @@ function ModelSelectorContent() {
     // LibreChat
     agentsMap,
     modelSpecs,
+    modelSpecsForTrigger,
     mappedEndpoints,
+    mappedEndpointsForDisplay,
     endpointsConfig,
     // State
+    isEmbedded,
     searchValue,
     searchResults,
     selectedValues,
@@ -37,26 +40,28 @@ function ModelSelectorContent() {
     keyDialogEndpoint,
   } = useModelSelectorContext();
 
+  const displayEndpoints = mappedEndpointsForDisplay ?? mappedEndpoints ?? [];
+  const displaySpecs = modelSpecsForTrigger ?? modelSpecs ?? [];
   const selectedIcon = useMemo(
     () =>
       getSelectedIcon({
-        mappedEndpoints: mappedEndpoints ?? [],
+        mappedEndpoints: displayEndpoints,
         selectedValues,
-        modelSpecs,
+        modelSpecs: displaySpecs,
         endpointsConfig,
       }),
-    [mappedEndpoints, selectedValues, modelSpecs, endpointsConfig],
+    [displayEndpoints, selectedValues, displaySpecs, endpointsConfig],
   );
   const selectedDisplayValue = useMemo(
     () =>
       getDisplayValue({
         localize,
         agentsMap,
-        modelSpecs,
+        modelSpecs: displaySpecs,
         selectedValues,
-        mappedEndpoints,
+        mappedEndpoints: displayEndpoints,
       }),
-    [localize, agentsMap, modelSpecs, selectedValues, mappedEndpoints],
+    [localize, agentsMap, displaySpecs, selectedValues, displayEndpoints],
   );
 
   const trigger = (
@@ -90,9 +95,13 @@ function ModelSelectorContent() {
             modelSpec: values.modelSpec || '',
           });
         }}
-        onSearch={(value) => setSearchValue(value)}
-        combobox={<input id="model-search" placeholder=" " />}
-        comboboxLabel={localize('com_endpoint_search_models')}
+        {...(isEmbedded
+          ? {}
+          : {
+              onSearch: (value: string) => setSearchValue(value),
+              combobox: <input id="model-search" placeholder=" " />,
+              comboboxLabel: localize('com_endpoint_search_models'),
+            })}
         trigger={trigger}
       >
         {searchResults ? (

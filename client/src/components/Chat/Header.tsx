@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo } from 'react';
 import { useRecoilValue } from 'recoil';
 import { useMediaQuery, TooltipAnchor } from '@librechat/client';
 import { useOutletContext } from 'react-router-dom';

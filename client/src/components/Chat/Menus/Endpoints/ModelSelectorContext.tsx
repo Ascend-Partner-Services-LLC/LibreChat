@@ -1,5 +1,5 @@
 import debounce from 'lodash/debounce';
-import React, { createContext, useContext, useState, useMemo } from 'react';
+import React, { createContext, useContext, useState, useMemo, useEffect } from 'react';
 import { EModelEndpoint, isAgentsEndpoint, isAssistantsEndpoint } from 'librechat-data-provider';
 import type * as t from 'librechat-data-provider';
 import type { Endpoint, SelectedValues } from '~/common';
@@ -21,9 +21,15 @@ type ModelSelectorContextType = {
   selectedValues: SelectedValues;
   endpointSearchValues: Record<string, string>;
   searchResults: (t.TModelSpec | Endpoint)[] | null;
+  isEmbedded: boolean;
   // LibreChat
+  /** Filtered for menu (embedded = agents only); use modelSpecsForTrigger for trigger display. */
   modelSpecs: t.TModelSpec[];
+  /** Full list for resolving current selection in trigger (icon/label). */
+  modelSpecsForTrigger: t.TModelSpec[];
   mappedEndpoints: Endpoint[];
+  /** Full endpoint list for resolving current selection in trigger (icon/label). */
+  mappedEndpointsForDisplay: Endpoint[];
   agentsMap: t.TAgentsMap | undefined;
   assistantsMap: t.TAssistantsMap | undefined;
   endpointsConfig: t.TEndpointsConfig;
@@ -59,6 +65,16 @@ export function ModelSelectorProvider({ children, startupConfig }: ModelSelector
   const { data: endpointsConfig } = useGetEndpointsQuery();
   const { endpoint, model, spec, agent_id, assistant_id, conversation, newConversation } =
     useModelSelectorChatContext();
+  const [isEmbedded, setIsEmbedded] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const fromUrl = new URLSearchParams(window.location.search).get('embedded') === 'true';
+      const fromStorage = sessionStorage.getItem('librechat_embedded') === 'true';
+      setIsEmbedded(fromUrl || fromStorage);
+    }
+  }, []);
+
   const modelSpecs = useMemo(() => {
     const specs = startupConfig?.modelSpecs?.list ?? [];
     if (!agentsMap) {
@@ -78,6 +94,12 @@ export function ModelSelectorProvider({ children, startupConfig }: ModelSelector
     });
   }, [startupConfig, agentsMap]);
 
+  /** In embedded mode, only show model specs that are for the agents endpoint. */
+  const modelSpecsForDisplay = useMemo(() => {
+    if (!isEmbedded) return modelSpecs;
+    return modelSpecs.filter((s) => s.preset?.endpoint === EModelEndpoint.agents);
+  }, [isEmbedded, modelSpecs]);
+
   const permissionLevel = useAgentDefaultPermissionLevel();
   const { data: agents = null } = useListAgentsQuery(
     { requiredPermission: permissionLevel },
@@ -86,12 +108,18 @@ export function ModelSelectorProvider({ children, startupConfig }: ModelSelector
     },
   );
 
-  const { mappedEndpoints, endpointRequiresUserKey } = useEndpoints({
+  const { mappedEndpoints: rawMappedEndpoints, endpointRequiresUserKey } = useEndpoints({
     agents,
     assistantsMap,
     startupConfig,
     endpointsConfig,
   });
+
+  /** In embedded mode, only show "My Agents" (hide OpenAI, Assistants, Google, Anthropic). */
+  const mappedEndpoints = useMemo(() => {
+    if (!isEmbedded) return rawMappedEndpoints;
+    return rawMappedEndpoints.filter((ep) => ep.value === EModelEndpoint.agents);
+  }, [isEmbedded, rawMappedEndpoints]);
 
   const { onSelectEndpoint, onSelectSpec } = useSelectMention({
     // presets,
@@ -142,9 +170,9 @@ export function ModelSelectorProvider({ children, startupConfig }: ModelSelector
     if (!searchValue) {
       return null;
     }
-    const allItems = [...modelSpecs, ...mappedEndpoints];
+    const allItems = [...modelSpecsForDisplay, ...mappedEndpoints];
     return filterItems(allItems, searchValue, agentsMap, assistantsMap || {});
-  }, [searchValue, modelSpecs, mappedEndpoints, agentsMap, assistantsMap]);
+  }, [searchValue, modelSpecsForDisplay, mappedEndpoints, agentsMap, assistantsMap]);
 
   const setDebouncedSearchValue = useMemo(
     () =>
@@ -215,11 +243,14 @@ export function ModelSelectorProvider({ children, startupConfig }: ModelSelector
     searchResults,
     selectedValues,
     endpointSearchValues,
+    isEmbedded,
     // LibreChat
     agentsMap,
-    modelSpecs,
+    modelSpecs: modelSpecsForDisplay,
+    modelSpecsForTrigger: modelSpecs,
     assistantsMap,
     mappedEndpoints,
+    mappedEndpointsForDisplay: rawMappedEndpoints,
     endpointsConfig,
 
     // Functions
