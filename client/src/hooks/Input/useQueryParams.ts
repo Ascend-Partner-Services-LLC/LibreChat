@@ -310,6 +310,10 @@ export default function useQueryParams({
         queryParams[key] = value;
       });
 
+      if (queryParams.embedded === 'true') {
+        sessionStorage.setItem('librechat_embedded', 'true');
+      }
+
       // Support both 'prompt' and 'q' as query parameters, with 'prompt' taking precedence
       const decodedPrompt = queryParams.prompt || queryParams.q || '';
       const shouldAutoSubmit = queryParams.submit?.toLowerCase() === 'true';

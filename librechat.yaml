@@ -68,6 +68,13 @@ mcpServers:
       }
       ```
 
+      ### Citing data sources in responses
+
+      **Always reference the data source** when answering so users know where information came from:
+      - **SQL / database**: Name the table(s) used (e.g. "From the **contacts** table...", "Based on **pbc_items** and **tax_projects**...").
+      - **Past year XMLs**: Mention the S3 file/source when showing prior-year return data (e.g. "From the past year return (S3: `firm-id/project-id/2024-return.xml`)...").
+      - **Extracted documents**: Say that data is from "extracted document data" and, when relevant, the document name or type (e.g. "From the W-2 document **Employer Name - 2024**...").
+
   dbhub:
     type: streamable-http
     url: http://host.docker.internal:8080/mcp

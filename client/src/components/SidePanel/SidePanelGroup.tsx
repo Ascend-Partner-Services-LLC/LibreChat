@@ -10,6 +10,15 @@ import { normalizeLayout } from '~/utils';
 import SidePanel from './SidePanel';
 import store from '~/store';
 
+/** In embedded mode (e.g. workspace iframe), always hide the control panel. */
+function useIsEmbedded(): boolean {
+  const [isEmbedded, setIsEmbedded] = useState(false);
+  useEffect(() => {
+    setIsEmbedded(new URLSearchParams(window.location.search).get('embedded') === 'true');
+  }, []);
+  return isEmbedded;
+}
+
 interface SidePanelProps {
   defaultLayout?: number[] | undefined;
   defaultCollapsed?: boolean;
@@ -46,6 +55,9 @@ const SidePanelGroup = memo(
 
     const isSmallScreen = useMediaQuery('(max-width: 767px)');
     const hideSidePanel = useRecoilValue(store.hideSidePanel);
+    const isEmbedded = useIsEmbedded();
+    const showControlPanel =
+      !hideSidePanel && !isEmbedded && interfaceConfig.sidePanel === true;
 
     const calculateLayout = useCallback(() => {
       if (artifacts == null) {
@@ -127,7 +139,7 @@ const SidePanelGroup = memo(
             />
           )}
 
-          {!hideSidePanel && interfaceConfig.sidePanel === true && (
+          {showControlPanel && (
             <SidePanel
               panelRef={panelRef}
               minSize={minSize}
@@ -147,7 +159,7 @@ const SidePanelGroup = memo(
         {artifacts != null && isSmallScreen && (
           <div className="fixed inset-0 z-[100]">{artifacts}</div>
         )}
-        {!hideSidePanel && interfaceConfig.sidePanel === true && (
+        {showControlPanel && (
           <button
             aria-label="Close right side panel"
             className={`nav-mask ${!isCollapsed ? 'active' : ''}`}

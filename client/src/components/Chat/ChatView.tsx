@@ -1,4 +1,4 @@
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useRecoilValue } from 'recoil';
 import { useForm } from 'react-hook-form';
 import { Spinner } from '@librechat/client';
@@ -9,6 +9,7 @@ import type { ChatFormValues } from '~/common';
 import { ChatContext, AddedChatContext, useFileMapContext, ChatFormProvider } from '~/Providers';
 import { useAddedResponse, useResumeOnLoad, useAdaptiveSSE, useChatHelpers } from '~/hooks';
 import ConversationStarters from './Input/ConversationStarters';
+import SuggestedQuestionsInInput from './Input/SuggestedQuestionsInInput';
 import { useGetMessagesByConvoId } from '~/data-provider';
 import MessagesView from './Messages/MessagesView';
 import Presentation from './Presentation';
@@ -16,6 +17,10 @@ import ChatForm from './Input/ChatForm';
 import Landing from './Landing';
 import Header from './Header';
 import Footer from './Footer';
+import {
+  EmbeddedSuggestedQuestionsContext,
+  useEmbeddedSuggestedQuestionsShowValue,
+} from './EmbeddedSuggestedQuestionsContext';
 import { cn } from '~/utils';
 import store from '~/store';
 
@@ -76,10 +81,17 @@ function ChatView({ index = 0 }: { index?: number }) {
     content = <Landing centerFormOnLanding={centerFormOnLanding} />;
   }
 
+  const showEmbeddedSuggestions = useEmbeddedSuggestedQuestionsShowValue(messagesTree ?? undefined);
+  const embeddedSuggestionsValue = useMemo(
+    () => ({ show: showEmbeddedSuggestions }),
+    [showEmbeddedSuggestions],
+  );
+
   return (
     <ChatFormProvider {...methods}>
       <ChatContext.Provider value={chatHelpers}>
         <AddedChatContext.Provider value={addedChatHelpers}>
+          <EmbeddedSuggestedQuestionsContext.Provider value={embeddedSuggestionsValue}>
           <Presentation>
             <div className="relative flex h-full w-full flex-col">
               {!isLoading && <Header />}
@@ -99,6 +111,7 @@ function ChatView({ index = 0 }: { index?: number }) {
                       isLandingPage && 'max-w-3xl transition-all duration-200 xl:max-w-4xl',
                     )}
                   >
+                    {!isLandingPage && <SuggestedQuestionsInInput />}
                     <ChatForm index={index} />
                     {isLandingPage ? <ConversationStarters /> : <Footer />}
                   </div>
@@ -107,6 +120,7 @@ function ChatView({ index = 0 }: { index?: number }) {
               </>
             </div>
           </Presentation>
+          </EmbeddedSuggestedQuestionsContext.Provider>
         </AddedChatContext.Provider>
       </ChatContext.Provider>
     </ChatFormProvider>

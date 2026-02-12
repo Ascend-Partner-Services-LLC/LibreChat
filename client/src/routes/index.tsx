@@ -33,6 +33,9 @@ const baseHref = baseEl?.getAttribute('href') || '/';
 
 // Check if embedded mode - use MemoryRouter to prevent history pollution
 const isEmbedded = new URLSearchParams(window.location.search).get('embedded') === 'true';
+if (isEmbedded && typeof sessionStorage !== 'undefined') {
+  sessionStorage.setItem('librechat_embedded', 'true');
+}
 
 const routes = [
   {
