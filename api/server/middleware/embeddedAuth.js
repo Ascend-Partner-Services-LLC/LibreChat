@@ -93,12 +93,14 @@ async function validateWorkspaceCookie(workspaceCookie, workspaceApiUrl) {
     const data = await response.json();
     // Handle wrapped response
     const userData = data.data || data;
-    
+    const firmName = userData.firm_name ?? (userData.firm && (userData.firm.firm_name ?? userData.firm.name)) ?? '';
+
     return {
       id: userData.id,
       email: userData.email,
       name: userData.name || userData.displayName || userData.first_name,
       firmId: userData.firm_id || userData.firmId,
+      firmName: firmName || undefined,
     };
   } catch (error) {
     logger.error('[embeddedAuth] Error validating workspace cookie:', error);
@@ -232,6 +234,10 @@ const embeddedAuth = async (req, res, next) => {
     const user = await findOrCreateUser(workspaceUser);
     if (user) {
       req.user = user;
+      // Attach firm name for analytics (e.g. Statsig) without persisting to User
+      if (workspaceUser.firmName) {
+        req.workspaceFirmName = workspaceUser.firmName;
+      }
       
       // Store workspace cookie for MCP forwarding
       // This is needed because API requests from iframe don't include the workspace cookie

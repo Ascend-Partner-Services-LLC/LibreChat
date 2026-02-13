@@ -947,6 +947,7 @@ class BaseClient {
         unfinished: false,
         user,
         ...(hasAddedConvo && { addedConvo: true }),
+        ...(this.sender != null && this.sender !== '' && { agent_name: this.sender }),
       },
       { context: 'api/app/clients/BaseClient.js - saveMessageToDatabase #saveMessage' },
     );

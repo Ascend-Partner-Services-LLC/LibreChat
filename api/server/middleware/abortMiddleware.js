@@ -63,7 +63,13 @@ async function abortMessage(req, res) {
   };
 
   await spendTokens(
-    { ...responseMessage, context: 'incomplete', user: userId },
+    {
+      ...responseMessage,
+      context: 'incomplete',
+      user: userId,
+      userEmail: req.user?.email,
+      firm_name: req.workspaceFirmName ?? req.user?.firm_name,
+    },
     { promptTokens, completionTokens },
   );
 

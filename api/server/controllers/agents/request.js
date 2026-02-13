@@ -286,7 +286,8 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
         // Save user message BEFORE sending final event to avoid race condition
         // where client refetch happens before database is updated
         if (!client.skipSaveUserMessage && userMessage) {
-          await saveMessage(req, userMessage, {
+          const agentName = client?.sender ?? client?.options?.agent?.name ?? '';
+          await saveMessage(req, { ...userMessage, agent_name: agentName }, {
             context: 'api/server/controllers/agents/request.js - resumable user message',
           });
         }
@@ -673,7 +674,8 @@ const _LegacyAgentController = async (req, res, next, initializeClient, addTitle
 
     // Save user message if needed
     if (!client.skipSaveUserMessage) {
-      await saveMessage(req, userMessage, {
+      const agentName = client?.sender ?? client?.options?.agent?.name ?? '';
+      await saveMessage(req, { ...userMessage, agent_name: agentName }, {
         context: "api/server/controllers/agents/request.js - don't skip saving user message",
       });
     }

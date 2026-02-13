@@ -1,5 +1,7 @@
 const { logger } = require('@librechat/data-schemas');
 const { createTransaction, createStructuredTransaction } = require('./Transaction');
+const { logEvent: statsigLogEvent } = require('../server/utils/statsigLogger');
+const { User } = require('~/db/models');
 /**
  * Creates up to two transactions to record the spending of tokens.
  *
@@ -50,6 +52,24 @@ const spendTokens = async (txData, tokenUsage) => {
         completionRate: completion?.rate,
         balance: completion?.balance ?? prompt?.balance,
       });
+      const totalTokens = (promptTokens ?? 0) + (completionTokens ?? 0);
+      if (txData.user && totalTokens > 0) {
+        let email = txData.userEmail ?? '';
+        if (!email && txData.user) {
+          try {
+            const u = await User.findById(txData.user).select('email').lean();
+            email = u?.email ?? '';
+          } catch (_) {
+            // ignore lookup errors for analytics
+          }
+        }
+        statsigLogEvent(txData.user, 'ascend_ai_tokens_used', totalTokens, {
+          conversation_id: txData.conversationId ?? '',
+          model: txData.model ?? '',
+          input_tokens: String(promptTokens ?? 0),
+          output_tokens: String(completionTokens ?? 0),
+        }, { email, firm_name: txData.firm_name ?? '' });
+      }
     } else {
       logger.debug('[spendTokens] No transactions incurred against balance');
     }

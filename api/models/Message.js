@@ -2,6 +2,7 @@ const { z } = require('zod');
 const { logger } = require('@librechat/data-schemas');
 const { createTempChatExpirationDate } = require('@librechat/api');
 const { Message } = require('~/db/models');
+const { logEvent: statsigLogEvent } = require('../server/utils/statsigLogger');
 
 const idSchema = z.string().uuid();
 
@@ -79,6 +80,18 @@ async function saveMessage(req, params, metadata) {
       update,
       { upsert: true, new: true },
     );
+
+    if (params.isCreatedByUser && params.text) {
+      // Truncate question text for Statsig (metadata string limit 4096 total; keep single field reasonable)
+      const questionText = typeof params.text === 'string' ? params.text.slice(0, 2000) : '';
+      statsigLogEvent(req.user.id, 'ascend_ai_question_asked', 1, {
+        conversation_id: params.conversationId,
+        model: params.model ?? '',
+        endpoint: params.endpoint ?? '',
+        agent_name: params.agent_name ?? params.modelLabel ?? '',
+        question_text: questionText,
+      }, { email: req.user?.email ?? '', firm_name: req.workspaceFirmName ?? req.user?.firm_name ?? '' });
+    }
 
     return message.toObject();
   } catch (err) {

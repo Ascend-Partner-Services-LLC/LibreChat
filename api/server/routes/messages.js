@@ -391,6 +391,15 @@ router.put('/:conversationId/:messageId/feedback', validateMessageReq, async (re
       { context: 'updateFeedback' },
     );
 
+    if (req.user?.id && feedback?.rating) {
+      const { logEvent: statsigLogEvent } = require('~/server/utils/statsigLogger');
+      statsigLogEvent(req.user.id, 'ascend_ai_feedback', 1, {
+        rating: feedback.rating,
+        tag: feedback?.tag?.key ?? '',
+        conversation_id: conversationId,
+      }, { email: req.user?.email ?? '', firm_name: req.workspaceFirmName ?? req.user?.firm_name ?? '' });
+    }
+
     res.json({
       messageId,
       conversationId,
