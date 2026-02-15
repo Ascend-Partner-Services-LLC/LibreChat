@@ -15,7 +15,7 @@
 
 const { logger } = require('@librechat/data-schemas');
 const cookies = require('cookie');
-const { findUser, createUser, getUserById } = require('~/models');
+const { findUser, createUser, updateUser, getUserById } = require('~/models');
 const { setAuthTokens } = require('~/server/services/AuthService');
 const { getAppConfig } = require('~/server/services/Config');
 const { getBalanceConfig } = require('@librechat/api');
@@ -126,16 +126,33 @@ async function findOrCreateUser(workspaceUser) {
     // Get app config and balance config for new user creation
     const appConfig = await getAppConfig();
     const balanceConfig = getBalanceConfig(appConfig);
-    
-    // Create new user for embedded access
-    user = await createUser({
+
+    const userData = {
       email: workspaceUser.email,
       name: workspaceUser.name || workspaceUser.email.split('@')[0],
       username: workspaceUser.email.split('@')[0],
       emailVerified: true, // Trust workspace auth
       provider: 'workspace', // Mark as workspace-authenticated user
-    }, balanceConfig);
+    };
+    if (workspaceUser.firmName) userData.firm_name = workspaceUser.firmName;
+    if (workspaceUser.firmId) userData.firm_id = workspaceUser.firmId;
+
+    // Create new user for embedded access
+    user = await createUser(userData, balanceConfig);
     logger.info(`[embeddedAuth] Created new user for workspace user: ${workspaceUser.email} with balance config:`, balanceConfig);
+  } else if (workspaceUser.firmName || workspaceUser.firmId) {
+    // Persist firm on existing user so admin and other views can show it
+    const updateData = {};
+    if (workspaceUser.firmName) updateData.firm_name = workspaceUser.firmName;
+    if (workspaceUser.firmId) updateData.firm_id = workspaceUser.firmId;
+    try {
+      const userId = user._id?.toString() || user.id?.toString();
+      if (userId) {
+        user = await updateUser(userId, updateData) || user;
+      }
+    } catch (err) {
+      logger.warn('[embeddedAuth] Failed to update user firm:', err?.message);
+    }
   }
 
   // Cache the user

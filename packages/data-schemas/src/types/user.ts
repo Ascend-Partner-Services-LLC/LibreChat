@@ -43,6 +43,8 @@ export interface IUser extends Document {
   updatedAt?: Date;
   /** Field for external source identification (for consistency with TPrincipal schema) */
   idOnTheSource?: string;
+  firm_name?: string;
+  firm_id?: string;
 }
 
 export interface BalanceConfig {

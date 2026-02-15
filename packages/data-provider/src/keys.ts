@@ -62,11 +62,18 @@ export enum QueryKeys {
   mcpServer = 'mcpServer',
   /* Active Jobs */
   activeJobs = 'activeJobs',
+  /* Admin */
+  adminBalances = 'adminBalances',
+  adminConversations = 'adminConversations',
+  adminConversationMessages = 'adminConversationMessages',
+  adminMetrics = 'adminMetrics',
 }
 
 // Dynamic query keys that require parameters
 export const DynamicQueryKeys = {
   agentFiles: (agentId: string) => ['agentFiles', agentId] as const,
+  adminConversationMessages: (conversationId: string) =>
+    [QueryKeys.adminConversationMessages, conversationId] as const,
 } as const;
 
 export enum MutationKeys {

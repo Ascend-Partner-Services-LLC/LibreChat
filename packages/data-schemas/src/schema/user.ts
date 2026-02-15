@@ -157,6 +157,8 @@ const userSchema = new Schema<IUser>(
       type: String,
       sparse: true,
     },
+    firm_name: { type: String },
+    firm_id: { type: String },
   },
   { timestamps: true },
 );

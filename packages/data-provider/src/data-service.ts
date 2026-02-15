@@ -109,6 +109,96 @@ export function getUserBalance(): Promise<t.TBalanceResponse> {
   return request.get(endpoints.balance());
 }
 
+export type AdminBalanceUser = {
+  userId: string;
+  email: string;
+  name: string;
+  firm: string | null;
+  tokenCredits: number;
+  totalTokensUsed: number;
+  nextRefillAmount: number | null;
+  nextRefillDate: string | null;
+};
+export type AdminBalancesResponse = {
+  users: AdminBalanceUser[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+};
+export function getAdminBalances(params?: {
+  page?: number;
+  limit?: number;
+  search?: string;
+}): Promise<AdminBalancesResponse> {
+  return request.get(endpoints.adminBalances(params));
+}
+
+export function topUpBalance(payload: {
+  email?: string;
+  userId?: string;
+  amount: number;
+}): Promise<{ success: boolean; email: string; newBalance: number; added: number }> {
+  return request.post(endpoints.adminBalancesTopup(), payload);
+}
+
+export type AdminConversation = {
+  conversationId: string;
+  title: string;
+  endpoint?: string;
+  createdAt: string;
+  updatedAt: string;
+  user: { email: string; name: string; firm: string | null } | null;
+  shareId: string | null;
+  questionCount: number;
+};
+export function getAdminConversations(params?: {
+  limit?: number;
+  cursor?: string;
+  sortBy?: string;
+  sortDirection?: string;
+  search?: string;
+}): Promise<{
+  conversations: AdminConversation[];
+  nextCursor: string | null;
+  total: number;
+  totalPages: number;
+}> {
+  return request.get(endpoints.adminConversations(params));
+}
+
+export type AdminMessage = {
+  messageId: string;
+  text?: string;
+  content?: Array<{ type?: string; text?: string }>;
+  sender: string;
+  isCreatedByUser: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+export function getAdminConversationMessages(
+  conversationId: string,
+): Promise<{ messages: AdminMessage[] }> {
+  return request.get(endpoints.adminConversationMessages(conversationId));
+}
+
+export type AdminMetrics = {
+  totalUsers: number;
+  newUsersLast7Days: number;
+  newUsersLast30Days: number;
+  totalConversations: number;
+  newConversationsLast7Days: number;
+  totalMessages: number;
+  questionsLast7Days: number;
+  totalTokensUsed: number;
+  tokensUsedLast7Days: number;
+  activeUsersLast7Days: number;
+  sharedLinksCount: number;
+};
+export function getAdminMetrics(): Promise<AdminMetrics> {
+  return request.get(endpoints.adminMetrics());
+}
+
 export const updateTokenCount = (text: string) => {
   return request.post(endpoints.tokenizer(), { arg: text });
 };

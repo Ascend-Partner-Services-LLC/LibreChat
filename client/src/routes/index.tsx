@@ -20,6 +20,7 @@ import ShareRoute from './ShareRoute';
 import ChatRoute from './ChatRoute';
 import Search from './Search';
 import Root from './Root';
+import AdminPage from '~/pages/Admin/AdminPage';
 
 const AuthLayout = () => (
   <AuthContextProvider>
@@ -111,6 +112,10 @@ const routes = [
           {
             path: 'c/:conversationId?',
             element: <ChatRoute />,
+          },
+          {
+            path: 'admin',
+            element: <AdminPage />,
           },
           {
             path: 'search',
