@@ -94,6 +94,7 @@ async function validateWorkspaceCookie(workspaceCookie, workspaceApiUrl) {
     // Handle wrapped response
     const userData = data.data || data;
     const firmName = userData.firm_name ?? (userData.firm && (userData.firm.firm_name ?? userData.firm.name)) ?? '';
+    const workspaceRole = userData.role || userData.job_title || undefined;
 
     return {
       id: userData.id,
@@ -101,6 +102,7 @@ async function validateWorkspaceCookie(workspaceCookie, workspaceApiUrl) {
       name: userData.name || userData.displayName || userData.first_name,
       firmId: userData.firm_id || userData.firmId,
       firmName: firmName || undefined,
+      workspaceRole: workspaceRole || undefined,
     };
   } catch (error) {
     logger.error('[embeddedAuth] Error validating workspace cookie:', error);
@@ -136,15 +138,17 @@ async function findOrCreateUser(workspaceUser) {
     };
     if (workspaceUser.firmName) userData.firm_name = workspaceUser.firmName;
     if (workspaceUser.firmId) userData.firm_id = workspaceUser.firmId;
+    if (workspaceUser.workspaceRole) userData.workspace_role = workspaceUser.workspaceRole;
 
     // Create new user for embedded access
     user = await createUser(userData, balanceConfig);
     logger.info(`[embeddedAuth] Created new user for workspace user: ${workspaceUser.email} with balance config:`, balanceConfig);
-  } else if (workspaceUser.firmName || workspaceUser.firmId) {
-    // Persist firm on existing user so admin and other views can show it
+  } else if (workspaceUser.firmName || workspaceUser.firmId || workspaceUser.workspaceRole) {
+    // Persist firm and workspace role on existing user so admin Users page can show "Role at Firm"
     const updateData = {};
     if (workspaceUser.firmName) updateData.firm_name = workspaceUser.firmName;
     if (workspaceUser.firmId) updateData.firm_id = workspaceUser.firmId;
+    if (workspaceUser.workspaceRole) updateData.workspace_role = workspaceUser.workspaceRole;
     try {
       const userId = user._id?.toString() || user.id?.toString();
       if (userId) {

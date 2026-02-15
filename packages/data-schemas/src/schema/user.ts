@@ -159,6 +159,8 @@ const userSchema = new Schema<IUser>(
     },
     firm_name: { type: String },
     firm_id: { type: String },
+    /** Role at the workspace/firm (from Workspace employee_auth/me), e.g. ascend_admin */
+    workspace_role: { type: String },
   },
   { timestamps: true },
 );

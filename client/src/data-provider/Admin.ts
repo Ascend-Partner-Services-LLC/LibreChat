@@ -2,7 +2,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { QueryKeys, DynamicQueryKeys, dataService } from 'librechat-data-provider';
 
 export const useAdminBalancesQuery = (
-  params?: { page?: number; limit?: number; search?: string },
+  params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    sortBy?: string;
+    sortDirection?: string;
+  },
   enabled = true,
 ) =>
   useQuery({
@@ -16,6 +22,17 @@ export const useAdminTopUpMutation = () => {
   return useMutation({
     mutationFn: (payload: { email?: string; userId?: string; amount: number }) =>
       dataService.topUpBalance(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries([QueryKeys.adminBalances]);
+    },
+  });
+};
+
+export const useAdminUpdateUserRoleMutation = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: string }) =>
+      dataService.updateUserRole(userId, role),
     onSuccess: () => {
       queryClient.invalidateQueries([QueryKeys.adminBalances]);
     },

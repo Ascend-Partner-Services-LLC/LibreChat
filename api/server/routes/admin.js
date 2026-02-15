@@ -56,6 +56,13 @@ router.get('/balances', async (req, res) => {
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 25));
     const skip = (page - 1) * limit;
     const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+    const sortBy = req.query.sortBy || 'email';
+    const sortDirection = req.query.sortDirection || 'asc';
+
+    const validSortFields = ['email', 'name', 'role', 'createdAt'];
+    const sortField = validSortFields.includes(sortBy) ? sortBy : 'email';
+    const sortOrder = sortDirection === 'desc' ? -1 : 1;
+    const sortObj = { [sortField]: sortOrder };
 
     const userFilter = {};
     if (search) {
@@ -70,8 +77,8 @@ router.get('/balances', async (req, res) => {
     const [total, users] = await Promise.all([
       User.countDocuments(userFilter),
       User.find(userFilter)
-        .select('email name _id firm_name firm_id')
-        .sort({ email: 1 })
+        .select('email name _id firm_name firm_id role workspace_role createdAt')
+        .sort(sortObj)
         .skip(skip)
         .limit(limit)
         .lean(),
@@ -128,16 +135,23 @@ router.get('/balances', async (req, res) => {
               bal.refillIntervalUnit,
             )
           : null;
-      return {
-        userId: bid,
-        email: u.email,
-        name: u.name || u.email,
-        firm: u.firm_name || u.firm_id || null,
-        tokenCredits: bal.tokenCredits ?? 0,
-        totalTokensUsed: tokensUsedByUser[bid] ?? 0,
-        nextRefillAmount: bal.autoRefillEnabled ? (bal.refillAmount ?? 0) : null,
-        nextRefillDate,
-      };
+      const firmDisplay = u.firm_name || u.firm_id || '';
+        const roleAtFirm =
+          u.workspace_role && firmDisplay
+            ? `${u.workspace_role}@${firmDisplay}`
+            : firmDisplay || '—';
+        return {
+          userId: bid,
+          email: u.email,
+          name: u.name || u.email,
+          firm: u.firm_name || u.firm_id || null,
+          role: u.role ?? 'USER',
+          roleAtFirm,
+          tokenCredits: bal.tokenCredits ?? 0,
+          totalTokensUsed: tokensUsedByUser[bid] ?? 0,
+          nextRefillAmount: bal.autoRefillEnabled ? (bal.refillAmount ?? 0) : null,
+          nextRefillDate,
+        };
     });
     const totalPages = Math.ceil(total / limit) || 1;
     res.status(200).json({
@@ -209,6 +223,37 @@ router.post('/balances/topup', async (req, res) => {
   }
 });
 
+const VALID_ROLES = ['USER', 'ADMIN'];
+
+/**
+ * PATCH /api/admin/users/:userId/role
+ * Body: { role: 'USER' | 'ADMIN' }
+ * Update a user's LibreChat role (admin only).
+ */
+router.patch('/users/:userId/role', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { role } = req.body;
+    if (!role || !VALID_ROLES.includes(role)) {
+      return res.status(400).json({ error: `Invalid role. Use one of: ${VALID_ROLES.join(', ')}` });
+    }
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $set: { role } },
+      { new: true, runValidators: true },
+    )
+      .select('_id email role')
+      .lean();
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.status(200).json({ userId: user._id.toString(), email: user.email, role: user.role });
+  } catch (error) {
+    logger.error('Error updating user role', error);
+    res.status(500).json({ error: 'Failed to update role' });
+  }
+});
+
 /**
  * GET /api/admin/conversations
  * List all conversations across users (admin only). Paginated.
@@ -222,13 +267,16 @@ router.get('/conversations', async (req, res) => {
     const sortDirection = req.query.sortDirection || 'desc';
     const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
 
-    const validSortFields = ['title', 'createdAt', 'updatedAt'];
+    const validSortFields = ['title', 'conversationId', 'createdAt', 'updatedAt'];
     if (!validSortFields.includes(sortBy)) {
       return res.status(400).json({ error: `Invalid sortBy. Use one of: ${validSortFields.join(', ')}` });
     }
 
     const sortOrder = sortDirection === 'asc' ? 1 : -1;
-    const sortObj = sortBy === 'updatedAt' ? { updatedAt: sortOrder } : { [sortBy]: sortOrder, updatedAt: sortOrder };
+    const sortObj =
+      sortBy === 'updatedAt'
+        ? { updatedAt: sortOrder }
+        : { [sortBy]: sortOrder, updatedAt: sortOrder };
 
     const baseFilter = { $or: [{ expiredAt: null }, { expiredAt: { $exists: false } }] };
     let searchOr = null;
@@ -249,7 +297,8 @@ router.get('/conversations', async (req, res) => {
     if (cursor) {
       try {
         const decoded = JSON.parse(Buffer.from(cursor, 'base64').toString());
-        const primaryValue = sortBy === 'title' ? decoded.primary : new Date(decoded.primary);
+        const isStringSort = sortBy === 'title' || sortBy === 'conversationId';
+        const primaryValue = isStringSort ? decoded.primary : new Date(decoded.primary);
         const op = sortOrder === 1 ? '$gt' : '$lt';
         filter[sortBy] = { [op]: primaryValue };
       } catch (e) {
@@ -323,7 +372,14 @@ router.get('/conversations', async (req, res) => {
     let nextCursor = null;
     if (hasMore && list.length > 0) {
       const last = list[list.length - 1];
-      const primaryStr = sortBy === 'title' ? last.title : last.updatedAt?.toISOString?.() ?? '';
+      const primaryStr =
+        sortBy === 'title'
+          ? last.title
+          : sortBy === 'conversationId'
+            ? last.conversationId
+            : sortBy === 'createdAt'
+              ? last.createdAt?.toISOString?.() ?? ''
+              : last.updatedAt?.toISOString?.() ?? '';
       nextCursor = Buffer.from(
         JSON.stringify({ primary: primaryStr, secondary: last.updatedAt?.toISOString?.() ?? '' }),
       ).toString('base64');

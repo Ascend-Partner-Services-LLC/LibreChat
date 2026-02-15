@@ -1,10 +1,10 @@
 import { useState, memo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import * as Select from '@ariakit/react/select';
 import { FileText, LogOut, Shield } from 'lucide-react';
 import { LinkIcon, GearIcon, DropdownMenuSeparator, Avatar } from '@librechat/client';
 import { SystemRoles } from 'librechat-data-provider';
 import { MyFilesModal } from '~/components/Chat/Input/Files/MyFilesModal';
+import { AdminModal } from '~/pages/Admin/AdminModal';
 import { useGetStartupConfig, useGetUserBalance } from '~/data-provider';
 import { useAuthContext } from '~/hooks/AuthContext';
 import { useLocalize } from '~/hooks';
@@ -12,7 +12,6 @@ import Settings from './Settings';
 
 function AccountSettings() {
   const localize = useLocalize();
-  const navigate = useNavigate();
   const { user, isAuthenticated, logout } = useAuthContext();
   const { data: startupConfig } = useGetStartupConfig();
   const balanceQuery = useGetUserBalance({
@@ -20,6 +19,7 @@ function AccountSettings() {
   });
   const [showSettings, setShowSettings] = useState(false);
   const [showFiles, setShowFiles] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
   const accountSettingsButtonRef = useRef<HTMLButtonElement>(null);
 
   return (
@@ -91,7 +91,7 @@ function AccountSettings() {
         {user?.role === SystemRoles.ADMIN && (
           <Select.SelectItem
             value=""
-            onClick={() => navigate('/admin')}
+            onClick={() => setShowAdmin(true)}
             className="select-item text-sm"
           >
             <Shield className="icon-md" aria-hidden="true" />
@@ -113,6 +113,13 @@ function AccountSettings() {
         <MyFilesModal
           open={showFiles}
           onOpenChange={setShowFiles}
+          triggerRef={accountSettingsButtonRef}
+        />
+      )}
+      {showAdmin && (
+        <AdminModal
+          open={showAdmin}
+          onOpenChange={setShowAdmin}
           triggerRef={accountSettingsButtonRef}
         />
       )}

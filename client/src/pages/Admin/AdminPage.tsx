@@ -6,17 +6,18 @@ import { useAuthContext } from '~/hooks';
 import {
   useAdminBalancesQuery,
   useAdminTopUpMutation,
+  useAdminUpdateUserRoleMutation,
   useAdminConversationsQuery,
   useAdminConversationMessagesQuery,
   useAdminMetricsQuery,
 } from '~/data-provider';
 import { format } from 'date-fns';
 import {
-  Coins,
   MessageSquare,
   ChevronDown,
   ChevronRight,
   ChevronLeft,
+  ChevronUp,
   Search,
   BarChart3,
   Users,
@@ -25,6 +26,52 @@ import {
   Link2,
 } from 'lucide-react';
 import { cn } from '~/utils';
+
+function SortableTh({
+  label,
+  sortKey,
+  currentSortBy,
+  currentDir,
+  onSort,
+  className,
+  defaultDir,
+}: {
+  label: string;
+  sortKey: string;
+  currentSortBy: string;
+  currentDir: 'asc' | 'desc';
+  onSort: (key: string, dir: 'asc' | 'desc') => void;
+  className?: string;
+  /** When switching to this column, use this direction if not already active */
+  defaultDir?: 'asc' | 'desc';
+}) {
+  const isActive = currentSortBy === sortKey;
+  return (
+    <th
+      className={cn('cursor-pointer select-none px-3 py-2 font-medium hover:bg-surface-active-alt/70', className)}
+      onClick={() => {
+        if (isActive) {
+          onSort(sortKey, currentDir === 'asc' ? 'desc' : 'asc');
+        } else {
+          onSort(sortKey, defaultDir ?? 'asc');
+        }
+      }}
+    >
+      <span className="flex items-center gap-1">
+        {label}
+        {isActive ? (
+          currentDir === 'asc' ? (
+            <ChevronUp className="h-3.5 w-3.5 shrink-0" />
+          ) : (
+            <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+          )
+        ) : (
+          <span className="inline-block h-3.5 w-3.5 shrink-0" />
+        )}
+      </span>
+    </th>
+  );
+}
 
 function getMessageDisplayText(m: { text?: string; content?: Array<{ type?: string; text?: string }> }): string {
   if (typeof m.text === 'string' && m.text) {
@@ -39,7 +86,14 @@ function getMessageDisplayText(m: { text?: string; content?: Array<{ type?: stri
   return '(no text)';
 }
 
-export default function AdminPage() {
+export type AdminPageProps = {
+  /** When true, render for use inside a modal (no full-page layout, close on non-admin) */
+  isModal?: boolean;
+  /** Called when modal should close (e.g. when user is not admin in modal context) */
+  onClose?: () => void;
+};
+
+export default function AdminPage({ isModal, onClose }: AdminPageProps = {}) {
   const { user } = useAuthContext();
   const { showToast } = useToastContext();
   const [activeTab, setActiveTab] = useState<'balances' | 'conversations' | 'metrics'>('balances');
@@ -53,28 +107,48 @@ export default function AdminPage() {
   const convoLimit = 25;
   const [balanceSearch, setBalanceSearch] = useState('');
   const [convoSearch, setConvoSearch] = useState('');
+  const [balanceSortBy, setBalanceSortBy] = useState('email');
+  const [balanceSortDir, setBalanceSortDir] = useState<'asc' | 'desc'>('asc');
+  const [convoSortBy, setConvoSortBy] = useState('updatedAt');
+  const [convoSortDir, setConvoSortDir] = useState<'asc' | 'desc'>('desc');
 
   const isAdmin = user?.role === SystemRoles.ADMIN;
 
   useEffect(() => {
     setBalancePage(1);
-  }, [balanceSearch]);
+  }, [balanceSearch, balanceSortBy, balanceSortDir]);
   useEffect(() => {
     setConvoPage(0);
     setConvoCursors([undefined]);
-  }, [convoSearch]);
+  }, [convoSearch, convoSortBy, convoSortDir]);
+
+  const handleBalanceSort = (key: string, dir: 'asc' | 'desc') => {
+    setBalanceSortBy(key);
+    setBalanceSortDir(dir);
+  };
+  const handleConvoSort = (key: string, dir: 'asc' | 'desc') => {
+    setConvoSortBy(key);
+    setConvoSortDir(dir);
+  };
 
   const { data: balancesData, isLoading: balancesLoading } = useAdminBalancesQuery(
-    { page: balancePage, limit: balanceLimit, search: balanceSearch || undefined },
+    {
+      page: balancePage,
+      limit: balanceLimit,
+      search: balanceSearch || undefined,
+      sortBy: balanceSortBy,
+      sortDirection: balanceSortDir,
+    },
     !!isAdmin,
   );
   const topUpMutation = useAdminTopUpMutation();
+  const updateRoleMutation = useAdminUpdateUserRoleMutation();
   const { data: convosData, isLoading: convosLoading } = useAdminConversationsQuery(
     {
       limit: convoLimit,
       cursor: convoCursors[convoPage],
-      sortBy: 'updatedAt',
-      sortDirection: 'desc',
+      sortBy: convoSortBy,
+      sortDirection: convoSortDir,
       search: convoSearch || undefined,
     },
     !!isAdmin,
@@ -84,6 +158,10 @@ export default function AdminPage() {
   const { data: metricsData, isLoading: metricsLoading } = useAdminMetricsQuery(!!isAdmin);
 
   if (user != null && !isAdmin) {
+    if (isModal && onClose) {
+      onClose();
+      return null;
+    }
     return <Navigate to="/c/new" replace />;
   }
   if (user == null) {
@@ -123,7 +201,12 @@ export default function AdminPage() {
   const messages = messagesData?.messages ?? [];
 
   return (
-    <div className="flex h-full w-full flex-col overflow-auto bg-transparent p-4 text-text-primary">
+    <div
+      className={cn(
+        'flex flex-col overflow-auto bg-transparent text-text-primary',
+        isModal ? 'min-h-[60vh] max-h-[85vh] w-full p-4' : 'h-full w-full p-4',
+      )}
+    >
       <div className="mb-4 flex gap-2 border-b border-border-medium pb-2">
         <button
           type="button"
@@ -135,8 +218,8 @@ export default function AdminPage() {
               : 'text-text-secondary hover:bg-surface-active-alt/70',
           )}
         >
-          <Coins className="h-4 w-4" />
-          Balances
+          <Users className="h-4 w-4" />
+          Users
         </button>
         <button
           type="button"
@@ -169,7 +252,7 @@ export default function AdminPage() {
       {activeTab === 'balances' && (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
-            <h2 className="text-lg font-semibold">User balances</h2>
+            <h2 className="text-lg font-semibold">Users</h2>
             <div className="flex flex-1 items-center gap-2 min-w-[200px] max-w-sm">
               <Search className="h-4 w-4 shrink-0 text-text-secondary" />
               <input
@@ -185,11 +268,31 @@ export default function AdminPage() {
             <p className="text-text-secondary">Loading…</p>
           ) : (
             <div className="overflow-x-auto rounded-lg border border-border-medium">
-              <table className="w-full min-w-[720px] text-left text-sm">
+              <table className="w-full min-w-[920px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-border-medium bg-surface-primary-alt">
-                    <th className="px-3 py-2 font-medium">Email</th>
-                    <th className="px-3 py-2 font-medium">Name</th>
+                    <SortableTh
+                      label="Email"
+                      sortKey="email"
+                      currentSortBy={balanceSortBy}
+                      currentDir={balanceSortDir}
+                      onSort={handleBalanceSort}
+                    />
+                    <SortableTh
+                      label="Name"
+                      sortKey="name"
+                      currentSortBy={balanceSortBy}
+                      currentDir={balanceSortDir}
+                      onSort={handleBalanceSort}
+                    />
+                    <SortableTh
+                      label="Role"
+                      sortKey="role"
+                      currentSortBy={balanceSortBy}
+                      currentDir={balanceSortDir}
+                      onSort={handleBalanceSort}
+                    />
+                    <th className="px-3 py-2 font-medium">Role at Firm</th>
                     <th className="px-3 py-2 font-medium">Balance (used %)</th>
                     <th className="px-3 py-2 font-medium">Total tokens used</th>
                     <th className="px-3 py-2 font-medium">Next auto top-up</th>
@@ -201,6 +304,52 @@ export default function AdminPage() {
                     <tr key={u.userId} className="border-b border-border-light">
                       <td className="px-3 py-2">{u.email}</td>
                       <td className="px-3 py-2">{u.name}</td>
+                      <td className="px-3 py-2">
+                        <select
+                          value={u.role ?? 'USER'}
+                          onChange={(e) => {
+                            const newRole = e.target.value as 'USER' | 'ADMIN';
+                            if (newRole !== (u.role ?? 'USER')) {
+                              updateRoleMutation.mutate(
+                                { userId: u.userId, role: newRole },
+                                {
+                                  onError: (err: Error) => {
+                                    showToast({ status: 'error', message: err.message || 'Failed to update role' });
+                                  },
+                                  onSuccess: () => {
+                                    showToast({
+                                      status: 'success',
+                                      message: `Role updated to ${newRole}`,
+                                    });
+                                  },
+                                },
+                              );
+                            }
+                          }}
+                          disabled={
+                            (user?.id ?? (user as { _id?: string })?._id?.toString()) === u.userId ||
+                            (updateRoleMutation.isPending &&
+                              updateRoleMutation.variables?.userId === u.userId)
+                          }
+                          title={
+                            (user?.id ?? (user as { _id?: string })?._id?.toString()) === u.userId
+                              ? 'Cannot change your own role'
+                              : undefined
+                          }
+                          className={cn(
+                            'min-w-[5.5rem] rounded border px-2 py-1 pr-7 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-border-strong',
+                            u.role === 'ADMIN'
+                              ? 'border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                              : 'border-border-medium bg-surface-primary text-text-secondary',
+                          )}
+                        >
+                          <option value="USER">USER</option>
+                          <option value="ADMIN">ADMIN</option>
+                        </select>
+                      </td>
+                      <td className="px-3 py-2 text-text-secondary">
+                        {u.roleAtFirm ?? '—'}
+                      </td>
                       <td className="px-3 py-2 font-mono">
                         {(() => {
                           const used = u.totalTokensUsed ?? 0;
@@ -306,11 +455,30 @@ export default function AdminPage() {
                 <thead>
                   <tr className="border-b border-border-medium bg-surface-primary-alt">
                     <th className="w-8 px-2 py-2" />
-                    <th className="px-3 py-2 font-medium">Conversation ID</th>
+                    <SortableTh
+                      label="Conversation ID"
+                      sortKey="conversationId"
+                      currentSortBy={convoSortBy}
+                      currentDir={convoSortDir}
+                      onSort={handleConvoSort}
+                    />
                     <th className="px-3 py-2 font-medium">User</th>
-                    <th className="px-3 py-2 font-medium">Title</th>
+                    <SortableTh
+                      label="Title"
+                      sortKey="title"
+                      currentSortBy={convoSortBy}
+                      currentDir={convoSortDir}
+                      onSort={handleConvoSort}
+                    />
                     <th className="px-3 py-2 font-medium">Questions</th>
-                    <th className="px-3 py-2 font-medium">Updated</th>
+                    <SortableTh
+                      label="Updated"
+                      sortKey="updatedAt"
+                      currentSortBy={convoSortBy}
+                      currentDir={convoSortDir}
+                      onSort={handleConvoSort}
+                      defaultDir="desc"
+                    />
                     <th className="px-3 py-2 font-medium">Shared link</th>
                   </tr>
                 </thead>

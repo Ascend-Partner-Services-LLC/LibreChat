@@ -45,9 +45,15 @@ export const user = () => `${BASE_URL}/api/user`;
 export const balance = () => `${BASE_URL}/api/balance`;
 
 const adminRoot = `${BASE_URL}/api/admin`;
-export const adminBalances = (params?: { page?: number; limit?: number; search?: string }) =>
-  `${adminRoot}/balances${params ? buildQuery(params) : ''}`;
+export const adminBalances = (params?: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  sortBy?: string;
+  sortDirection?: string;
+}) => `${adminRoot}/balances${params ? buildQuery(params) : ''}`;
 export const adminBalancesTopup = () => `${adminRoot}/balances/topup`;
+export const adminUpdateUserRole = (userId: string) => `${adminRoot}/users/${userId}/role`;
 export const adminConversations = (params?: {
   limit?: number;
   cursor?: string;

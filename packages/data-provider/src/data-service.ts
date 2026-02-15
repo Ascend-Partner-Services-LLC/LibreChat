@@ -114,6 +114,9 @@ export type AdminBalanceUser = {
   email: string;
   name: string;
   firm: string | null;
+  role: string;
+  /** Workspace role at firm, e.g. "ascend_admin@Ascend" */
+  roleAtFirm: string;
   tokenCredits: number;
   totalTokensUsed: number;
   nextRefillAmount: number | null;
@@ -130,6 +133,8 @@ export function getAdminBalances(params?: {
   page?: number;
   limit?: number;
   search?: string;
+  sortBy?: string;
+  sortDirection?: string;
 }): Promise<AdminBalancesResponse> {
   return request.get(endpoints.adminBalances(params));
 }
@@ -140,6 +145,13 @@ export function topUpBalance(payload: {
   amount: number;
 }): Promise<{ success: boolean; email: string; newBalance: number; added: number }> {
   return request.post(endpoints.adminBalancesTopup(), payload);
+}
+
+export function updateUserRole(
+  userId: string,
+  role: string,
+): Promise<{ userId: string; email: string; role: string }> {
+  return request.patch(endpoints.adminUpdateUserRole(userId), { role });
 }
 
 export type AdminConversation = {

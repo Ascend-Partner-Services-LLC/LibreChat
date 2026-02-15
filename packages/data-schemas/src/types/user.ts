@@ -45,6 +45,8 @@ export interface IUser extends Document {
   idOnTheSource?: string;
   firm_name?: string;
   firm_id?: string;
+  /** Role at the workspace/firm (e.g. ascend_admin, firm_staff), from Workspace API */
+  workspace_role?: string;
 }
 
 export interface BalanceConfig {
